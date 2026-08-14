@@ -4,7 +4,9 @@ export default function InputGrid({
   businesses,
   previous,
   current,
+  misc,
   onChange,
+  onMiscChange,
   onRename,
   onRemove,
   onSetPrevious,
@@ -31,7 +33,9 @@ export default function InputGrid({
             biz={biz}
             previous={previous}
             currentValue={current[biz.id]}
+            miscValue={misc[biz.id]}
             onChange={onChange}
+            onMiscChange={onMiscChange}
             onRename={onRename}
             onRemove={onRemove}
             onSetPrevious={onSetPrevious}

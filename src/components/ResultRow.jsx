@@ -17,6 +17,7 @@ export default function ResultRow({ row, maxUnits }) {
           <div className="spark-fill" style={{ width: `${barWidth}%` }} />
         </div>
       </div>
+      <span className="align-right mono muted cell-misc">{row.misc > 0 ? formatNaira(row.misc) : '—'}</span>
       <span className="align-right mono amount">{formatNaira(row.amount)}</span>
     </div>
   )

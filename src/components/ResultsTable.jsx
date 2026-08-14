@@ -22,6 +22,7 @@ export default function ResultsTable({ result, flash, onSave, onPrint }) {
           <span className="align-right">Prev</span>
           <span className="align-right">Current</span>
           <span className="align-right">Units</span>
+          <span className="align-right">Misc</span>
           <span className="align-right">Amount</span>
         </div>
 
@@ -30,7 +31,7 @@ export default function ResultsTable({ result, flash, onSave, onPrint }) {
         ))}
       </div>
 
-      <Totals totalUnits={result.totalUnits} totalAmount={result.totalAmount} />
+      <Totals totalUnits={result.totalUnits} totalMisc={result.totalMisc} totalAmount={result.totalAmount} />
     </section>
   )
 }

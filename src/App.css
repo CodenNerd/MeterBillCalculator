@@ -237,6 +237,22 @@
   position: relative;
 }
 
+.optional-tag {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+  opacity: 0.6;
+  font-size: 10px;
+}
+
+.misc-wrap {
+  min-width: 100px;
+}
+
+.misc-input {
+  width: 100px;
+}
+
 .reading-input {
   background: var(--navy);
   border: 1px solid var(--navy-border);
@@ -355,7 +371,7 @@
 
 .table-head {
   display: grid;
-  grid-template-columns: 1fr 100px 100px 130px 120px;
+  grid-template-columns: 1fr 90px 90px 110px 100px 120px;
   padding: 12px 28px;
   font-size: 11px;
   text-transform: uppercase;
@@ -367,7 +383,7 @@
 
 .table-row {
   display: grid;
-  grid-template-columns: 1fr 100px 100px 130px 120px;
+  grid-template-columns: 1fr 90px 90px 110px 100px 120px;
   padding: 14px 28px;
   border-bottom: 1px solid var(--navy-border);
   align-items: center;
@@ -454,6 +470,11 @@
 }
 
 .totals-units {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.totals-misc {
   font-size: 13px;
   color: var(--muted);
 }
@@ -566,6 +587,7 @@
   .table-row > span:nth-child(2)::before,
   .table-row > span:nth-child(3)::before,
   .table-row > .cell-units::before,
+  .table-row > .cell-misc::before,
   .table-row > .amount::before {
     display: block;
     font-size: 10px;
@@ -577,6 +599,7 @@
   .table-row > span:nth-child(2)::before { content: "Prev"; }
   .table-row > span:nth-child(3)::before { content: "Curr"; }
   .table-row > .cell-units::before { content: "Units"; }
+  .table-row > .cell-misc::before { content: "Misc"; }
   .table-row > .amount::before { content: "Amount"; }
   .table-row .cell-units {
     align-items: flex-end;

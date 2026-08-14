@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { isReadingValid } from '../utils/billing'
 
-export default function InputRow({ biz, previous, currentValue, onChange, onRename, onRemove, onSetPrevious }) {
+export default function InputRow({ biz, previous, currentValue, miscValue, onChange, onMiscChange, onRename, onRemove, onSetPrevious }) {
   const [editingName, setEditingName] = useState(false)
   const [editingPrev, setEditingPrev] = useState(false)
   const prev = previous[biz.id] ?? 0
@@ -63,6 +63,20 @@ export default function InputRow({ biz, previous, currentValue, onChange, onRena
               <span className="edit-hint">✎</span>
             </button>
           )}
+        </div>
+
+        <div className="input-wrap misc-wrap">
+          <label htmlFor={`misc-${biz.id}`}>Misc (₦) <span className="optional-tag">optional</span></label>
+          <input
+            id={`misc-${biz.id}`}
+            type="number"
+            className="reading-input misc-input"
+            placeholder="0.00"
+            value={miscValue ?? ''}
+            onChange={e => onMiscChange(biz.id, e.target.value)}
+            step="0.01"
+            min="0"
+          />
         </div>
 
         <div className="input-wrap">

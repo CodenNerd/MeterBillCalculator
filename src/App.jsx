@@ -16,6 +16,9 @@ export default function App() {
   // Current readings still live locally (in-progress, not saved yet)
   const [current, setCurrent] = useStorage('mc_current', {})
 
+  // Optional miscellaneous bill per business, also in-progress/local
+  const [misc, setMisc] = useStorage('mc_misc', {})
+
   const [result, setResult] = useState(null)
   const [flash, setFlash] = useState(false)
   const [toast, setToast] = useState(null)
@@ -28,6 +31,10 @@ export default function App() {
   // ---- Input handlers ----
   function handleCurrentChange(id, value) {
     setCurrent({ ...current, [id]: value })
+  }
+
+  function handleMiscChange(id, value) {
+    setMisc({ ...misc, [id]: value })
   }
 
   async function handleRename(id, newName) {
@@ -49,6 +56,8 @@ export default function App() {
         await remove(id)
         const { [id]: _, ...rest } = current
         setCurrent(rest)
+        const { [id]: __, ...restMisc } = misc
+        setMisc(restMisc)
         setResult(null)
         setConfirm(null)
       },
@@ -62,7 +71,7 @@ export default function App() {
 
   // ---- Calculate ----
   function handleCalculate() {
-    const res = calculateBills(bizList, previous, current)
+    const res = calculateBills(bizList, previous, current, misc)
     setResult(res)
     setFlash(true)
     setTimeout(() => setFlash(false), 600)
@@ -79,6 +88,7 @@ export default function App() {
         try {
           await saveCycle(current)
           setCurrent({})
+          setMisc({})
           setResult(null)
           setConfirm(null)
           showToast('Saved — ready for next billing cycle')
@@ -99,6 +109,7 @@ export default function App() {
       danger: true,
       onConfirm: () => {
         setCurrent({})
+        setMisc({})
         setResult(null)
         setConfirm(null)
         showToast('Inputs cleared')
@@ -145,7 +156,9 @@ export default function App() {
           businesses={bizList}
           previous={previous}
           current={current}
+          misc={misc}
           onChange={handleCurrentChange}
+          onMiscChange={handleMiscChange}
           onRename={handleRename}
           onRemove={handleRemove}
           onSetPrevious={handleSetPrevious}
