@@ -49,6 +49,22 @@ export async function renameBusiness(id, newName) {
 }
 
 /**
+ * Manually set a business's previous (former cumulative) reading.
+ * Used for onboarding an existing tenant whose starting reading isn't 0,
+ * or for correcting a mistaken value outside the normal save-cycle flow.
+ * @param {number} id
+ * @param {number} value
+ */
+export async function updatePreviousReading(id, value) {
+  const { error } = await supabase
+    .from('businesses')
+    .update({ previous_reading: value, updated_at: new Date().toISOString() })
+    .eq('id', id)
+
+  if (error) throw new Error(error.message)
+}
+
+/**
  * Remove a business from the DB.
  * @param {number} id
  */

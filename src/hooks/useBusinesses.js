@@ -5,6 +5,7 @@ import {
   renameBusiness,
   removeBusiness,
   saveCycleReadings,
+  updatePreviousReading,
 } from '../services/supabase'
 
 /**
@@ -68,6 +69,19 @@ export function useBusinesses() {
     }
   }
 
+  async function setPrevious(id, value) {
+    const parsed = parseFloat(value)
+    const nextReading = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+    try {
+      await updatePreviousReading(id, nextReading)
+      setBusinesses(prev =>
+        prev.map(b => (b.id === id ? { ...b, previous_reading: nextReading } : b))
+      )
+    } catch (err) {
+      setError('Failed to update previous reading.')
+    }
+  }
+
   async function saveCycle(currentReadings) {
     try {
       const updates = businesses.map(b => {
@@ -97,5 +111,5 @@ export function useBusinesses() {
     }
   }
 
-  return { businesses, loading, error, add, rename, remove, saveCycle, reload: load }
+  return { businesses, loading, error, add, rename, remove, setPrevious, saveCycle, reload: load }
 }

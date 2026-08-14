@@ -7,6 +7,7 @@ export default function InputGrid({
   onChange,
   onRename,
   onRemove,
+  onSetPrevious,
   onAddBusiness,
   onCalculate,
   onClear,
@@ -33,6 +34,7 @@ export default function InputGrid({
             onChange={onChange}
             onRename={onRename}
             onRemove={onRemove}
+            onSetPrevious={onSetPrevious}
           />
         ))}
 

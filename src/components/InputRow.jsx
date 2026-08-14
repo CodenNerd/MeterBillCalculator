@@ -1,14 +1,21 @@
 import { useState } from 'react'
 import { isReadingValid } from '../utils/billing'
 
-export default function InputRow({ biz, previous, currentValue, onChange, onRename, onRemove }) {
+export default function InputRow({ biz, previous, currentValue, onChange, onRename, onRemove, onSetPrevious }) {
   const [editingName, setEditingName] = useState(false)
+  const [editingPrev, setEditingPrev] = useState(false)
   const prev = previous[biz.id] ?? 0
   const valid = isReadingValid(currentValue, prev)
 
   function handleNameBlur(e) {
     onRename(biz.id, e.target.value)
     setEditingName(false)
+  }
+
+  function handlePrevBlur(e) {
+    const parsed = parseFloat(e.target.value)
+    onSetPrevious(biz.id, Number.isFinite(parsed) && parsed >= 0 ? parsed : 0)
+    setEditingPrev(false)
   }
 
   return (
@@ -35,7 +42,27 @@ export default function InputRow({ biz, previous, currentValue, onChange, onRena
       <div className="reading-fields">
         <div className="prev-reading">
           <label>Previous</label>
-          <span className="mono prev-val">{prev.toFixed(2)}</span>
+          {editingPrev ? (
+            <input
+              className="name-input prev-input"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={prev}
+              onBlur={handlePrevBlur}
+              onKeyDown={e => e.key === 'Enter' && e.target.blur()}
+              autoFocus
+            />
+          ) : (
+            <button
+              className="prev-val-btn"
+              onClick={() => setEditingPrev(true)}
+              title="Click to set former cumulative reading"
+            >
+              <span className="mono prev-val">{prev.toFixed(2)}</span>
+              <span className="edit-hint">✎</span>
+            </button>
+          )}
         </div>
 
         <div className="input-wrap">

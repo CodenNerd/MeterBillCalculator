@@ -11,7 +11,7 @@ import './App.css'
 
 export default function App() {
   // Remote data — businesses + their previous readings
-  const { businesses, loading, error, add, rename, remove, saveCycle, reload } = useBusinesses()
+  const { businesses, loading, error, add, rename, remove, setPrevious, saveCycle, reload } = useBusinesses()
 
   // Current readings still live locally (in-progress, not saved yet)
   const [current, setCurrent] = useStorage('mc_current', {})
@@ -32,6 +32,11 @@ export default function App() {
 
   async function handleRename(id, newName) {
     await rename(id, newName)
+  }
+
+  async function handleSetPrevious(id, value) {
+    await setPrevious(id, value)
+    setResult(null)
   }
 
   function handleRemove(id) {
@@ -143,6 +148,7 @@ export default function App() {
           onChange={handleCurrentChange}
           onRename={handleRename}
           onRemove={handleRemove}
+          onSetPrevious={handleSetPrevious}
           onAddBusiness={handleAddBusiness}
           onCalculate={handleCalculate}
           onClear={handleClear}
