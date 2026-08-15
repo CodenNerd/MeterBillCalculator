@@ -1,7 +1,7 @@
 import ResultRow from './ResultRow'
 import Totals from './Totals'
 
-export default function ResultsTable({ result, flash, onSave, onPrint }) {
+export default function ResultsTable({ result, flash, onSave, onPrint, onShareRow, onDownloadRow }) {
   const maxUnits = Math.max(...result.rows.map(r => r.units), 0.01)
   const hasLineLoss = result.lineLoss !== undefined
 
@@ -29,7 +29,14 @@ export default function ResultsTable({ result, flash, onSave, onPrint }) {
         </div>
 
         {result.rows.map(row => (
-          <ResultRow key={row.id} row={row} maxUnits={maxUnits} hasLineLoss={hasLineLoss} />
+          <ResultRow
+            key={row.id}
+            row={row}
+            maxUnits={maxUnits}
+            hasLineLoss={hasLineLoss}
+            onShare={onShareRow}
+            onDownload={onDownloadRow}
+          />
         ))}
       </div>
 

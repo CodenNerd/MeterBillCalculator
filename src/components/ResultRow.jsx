@@ -1,6 +1,6 @@
 import { formatNaira } from '../utils/billing'
 
-export default function ResultRow({ row, maxUnits, hasLineLoss }) {
+export default function ResultRow({ row, maxUnits, hasLineLoss, onShare, onDownload }) {
   const barWidth = row.units > 0 ? (row.units / maxUnits) * 100 : 0
 
   return (
@@ -8,6 +8,30 @@ export default function ResultRow({ row, maxUnits, hasLineLoss }) {
       <div className="cell-biz">
         <span className="biz-num-sm">{row.id}</span>
         <span>{row.name}</span>
+        {(onShare || onDownload) && (
+          <span className="row-share-icons">
+            {onShare && (
+              <button
+                type="button"
+                className="icon-btn"
+                title="Share link with this business"
+                onClick={() => onShare(row)}
+              >
+                🔗
+              </button>
+            )}
+            {onDownload && (
+              <button
+                type="button"
+                className="icon-btn"
+                title="Download bill image"
+                onClick={() => onDownload(row)}
+              >
+                ⬇
+              </button>
+            )}
+          </span>
+        )}
       </div>
       <span className="align-right mono muted">{row.prev.toFixed(2)}</span>
       <span className="align-right mono">{row.curr.toFixed(2)}</span>

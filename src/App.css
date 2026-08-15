@@ -409,6 +409,31 @@
   gap: 10px;
 }
 
+.row-share-icons {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.icon-btn:hover {
+  opacity: 1;
+  background: var(--navy-border);
+  color: var(--amber);
+}
+
 .biz-num-sm {
   width: 22px;
   height: 22px;
@@ -493,6 +518,103 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--amber);
+}
+
+/* ---- Results Page ---- */
+.results-page-nav {
+  margin-bottom: 16px;
+}
+
+.results-resume {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+/* ---- Bill Page (shared per-business view) ---- */
+.bill-page-main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding-top: 48px;
+}
+
+.bill-card {
+  padding: 32px;
+}
+
+.bill-card-header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.bill-tag {
+  display: inline-block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--amber);
+  background: var(--amber-glow);
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+
+.bill-card-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--white);
+  margin: 4px 0;
+}
+
+.bill-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 0;
+  border-top: 1px solid var(--navy-border);
+  border-bottom: 1px solid var(--navy-border);
+  margin-top: 16px;
+}
+
+.bill-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.bill-line .mono { color: var(--white); }
+
+.bill-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.bill-total > span:first-child {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.bill-total .mono {
+  color: var(--amber);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.bill-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.bill-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 20px;
 }
 
 /* ---- Line Loss Reconciliation ---- */
@@ -675,13 +797,15 @@
 
 /* ---- Print ---- */
 @media print {
-  .header, .actions, .result-actions, .input-card { display: none !important; }
+  .header, .actions, .result-actions, .input-card, .bill-actions, .results-page-nav { display: none !important; }
   .app, .main { background: white !important; color: black !important; }
   .card { border: 1px solid #ccc !important; background: white !important; }
   .table-row, .table-head { color: black !important; }
   .amount, .totals-amount { color: #333 !important; }
   .muted { color: #666 !important; }
   .spark-bar { display: none; }
+  .bill-card-header h1, .bill-total .mono { color: #111 !important; }
+  .bill-line .mono { color: #222 !important; }
 }
 
 /* ---- Responsive ---- */

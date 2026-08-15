@@ -1,18 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useBusinesses } from './hooks/useBusinesses'
 import { useStorage } from './hooks/useStorage'
-import { calculateBills, applyLineLoss } from './utils/billing'
+import { calculateBills, applyLineLoss, RATE_PER_UNIT } from './utils/billing'
 import { saveBillingCycle } from './services/supabase'
+import { useHashRoute, navigate } from './utils/hashRouter'
+import { buildBillPayload, buildShareUrl, shareOrCopyLink } from './utils/share'
+import { downloadBillImage } from './utils/billImage'
 import Header from './components/Header'
 import InputGrid from './components/InputGrid'
-import ResultsTable from './components/ResultsTable'
-import LineLossPanel from './components/LineLossPanel'
+import ResultsPage from './components/ResultsPage'
+import BillPage from './components/BillPage'
 import CycleHistory from './components/CycleHistory'
 import ConfirmDialog from './components/ConfirmDialog'
 import Toast from './components/Toast'
 import './App.css'
 
 export default function App() {
+  const route = useHashRoute()
+
   // Remote data — businesses + their previous readings
   const { businesses, loading, error, add, rename, remove, setPrevious, saveCycle, reload } = useBusinesses()
 
@@ -79,7 +84,16 @@ export default function App() {
     setResult(res)
     setFlash(true)
     setTimeout(() => setFlash(false), 600)
+    navigate('/results')
   }
+
+  // Redirect to the input page if someone lands on #/results with nothing computed
+  // (e.g. a stale bookmark or a page refresh).
+  useEffect(() => {
+    if (route.path === 'results' && !result) {
+      navigate('/')
+    }
+  }, [route.path, result])
 
   // ---- Line loss reconciliation ----
   function handleApplyLineLoss(actualBill) {
@@ -88,6 +102,31 @@ export default function App() {
 
   function handleResetLineLoss() {
     setResult(calculateBills(bizList, previous, current, misc))
+  }
+
+  // ---- Share / download an individual business's bill ----
+  function billContext() {
+    const hasLineLoss = result?.lineLoss !== undefined
+    return {
+      ratePerUnit: RATE_PER_UNIT,
+      hasLineLoss,
+      cycleDate: new Date().toLocaleDateString('en-NG', {
+        weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+      }),
+    }
+  }
+
+  async function handleShareRow(row) {
+    const payload = buildBillPayload(row, billContext())
+    const url = buildShareUrl(payload)
+    const outcome = await shareOrCopyLink(url, `${row.name} — Electricity Bill`)
+    if (outcome === 'copied') showToast('Link copied to clipboard')
+    if (outcome === 'failed') showToast('Could not copy link')
+  }
+
+  function handleDownloadRow(row) {
+    const payload = buildBillPayload(row, billContext())
+    downloadBillImage(payload)
   }
 
   // ---- Save cycle ----
@@ -117,6 +156,7 @@ export default function App() {
           setMisc({})
           setResult(null)
           setConfirm(null)
+          navigate('/')
           showToast('Saved — ready for next billing cycle')
         } catch {
           showToast('Save failed. Please try again.')
@@ -148,6 +188,12 @@ export default function App() {
     setTimeout(() => setToast(null), 3500)
   }
 
+  // The shared bill page is fully self-contained (data lives in the URL) —
+  // render it without any of the app chrome or Supabase state.
+  if (route.path === 'bill') {
+    return <BillPage encoded={route.params.d} />
+  }
+
   // ---- Loading / error states ----
   if (loading) {
     return (
@@ -177,40 +223,44 @@ export default function App() {
     <div className="app">
       <Header onShowHistory={() => setShowHistory(true)} />
 
-      <main className="main">
-        <InputGrid
-          businesses={bizList}
-          previous={previous}
-          current={current}
-          misc={misc}
-          onChange={handleCurrentChange}
-          onMiscChange={handleMiscChange}
-          onRename={handleRename}
-          onRemove={handleRemove}
-          onSetPrevious={handleSetPrevious}
-          onAddBusiness={handleAddBusiness}
-          onCalculate={handleCalculate}
-          onClear={handleClear}
+      {route.path === 'results' && result ? (
+        <ResultsPage
+          result={result}
+          flash={flash}
+          onBack={() => navigate('/')}
+          onSave={handleSave}
+          onPrint={() => window.print()}
+          onApplyLineLoss={handleApplyLineLoss}
+          onResetLineLoss={handleResetLineLoss}
+          onShareRow={handleShareRow}
+          onDownloadRow={handleDownloadRow}
         />
-
-        {result && (
-          <LineLossPanel
-            result={result}
-            businessCount={result.rows.length}
-            onApply={handleApplyLineLoss}
-            onReset={handleResetLineLoss}
+      ) : (
+        <main className="main">
+          <InputGrid
+            businesses={bizList}
+            previous={previous}
+            current={current}
+            misc={misc}
+            onChange={handleCurrentChange}
+            onMiscChange={handleMiscChange}
+            onRename={handleRename}
+            onRemove={handleRemove}
+            onSetPrevious={handleSetPrevious}
+            onAddBusiness={handleAddBusiness}
+            onCalculate={handleCalculate}
+            onClear={handleClear}
           />
-        )}
 
-        {result && (
-          <ResultsTable
-            result={result}
-            flash={flash}
-            onSave={handleSave}
-            onPrint={() => window.print()}
-          />
-        )}
-      </main>
+          {result && (
+            <div className="results-resume">
+              <button className="btn btn-sm btn-outline" onClick={() => navigate('/results')}>
+                View Last Calculated Results →
+              </button>
+            </div>
+          )}
+        </main>
+      )}
 
       {confirm && (
         <ConfirmDialog
