@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { useBusinesses } from './hooks/useBusinesses'
 import { useStorage } from './hooks/useStorage'
-import { calculateBills } from './utils/billing'
+import { calculateBills, applyLineLoss } from './utils/billing'
+import { saveBillingCycle } from './services/supabase'
 import Header from './components/Header'
 import InputGrid from './components/InputGrid'
 import ResultsTable from './components/ResultsTable'
+import LineLossPanel from './components/LineLossPanel'
+import CycleHistory from './components/CycleHistory'
 import ConfirmDialog from './components/ConfirmDialog'
 import Toast from './components/Toast'
 import './App.css'
@@ -23,6 +26,7 @@ export default function App() {
   const [flash, setFlash] = useState(false)
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   // Build the shape InputGrid and calculateBills expect
   const bizList = businesses.map(b => ({ id: b.id, name: b.name }))
@@ -77,15 +81,37 @@ export default function App() {
     setTimeout(() => setFlash(false), 600)
   }
 
+  // ---- Line loss reconciliation ----
+  function handleApplyLineLoss(actualBill) {
+    setResult(prev => applyLineLoss(prev, actualBill))
+  }
+
+  function handleResetLineLoss() {
+    setResult(calculateBills(bizList, previous, current, misc))
+  }
+
   // ---- Save cycle ----
   function handleSave() {
     setConfirm({
       message: 'Save as previous readings?',
-      detail: "Current readings become next cycle's starting point for everyone.",
+      detail: "Current readings become next cycle's starting point for everyone. This cycle's bill breakdown will be saved to history.",
       confirmLabel: 'Save & Continue',
       danger: false,
       onConfirm: async () => {
         try {
+          const hasLineLoss = result.lineLoss !== undefined
+          const calculatedUnitTotal = hasLineLoss
+            ? result.calculatedUnitTotal
+            : result.rows.reduce((sum, r) => sum + r.unitAmount, 0)
+
+          const summary = {
+            actualBill: hasLineLoss ? result.actualBill : calculatedUnitTotal,
+            calculatedUnitTotal,
+            totalMisc: result.totalMisc,
+            lineLoss: hasLineLoss ? result.lineLoss : 0,
+          }
+
+          await saveBillingCycle(summary, result.rows)
           await saveCycle(current)
           setCurrent({})
           setMisc({})
@@ -149,7 +175,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header />
+      <Header onShowHistory={() => setShowHistory(true)} />
 
       <main className="main">
         <InputGrid
@@ -166,6 +192,15 @@ export default function App() {
           onCalculate={handleCalculate}
           onClear={handleClear}
         />
+
+        {result && (
+          <LineLossPanel
+            result={result}
+            businessCount={result.rows.length}
+            onApply={handleApplyLineLoss}
+            onReset={handleResetLineLoss}
+          />
+        )}
 
         {result && (
           <ResultsTable
@@ -187,6 +222,8 @@ export default function App() {
           onCancel={() => setConfirm(null)}
         />
       )}
+
+      {showHistory && <CycleHistory onClose={() => setShowHistory(false)} />}
 
       <Toast message={toast} />
     </div>

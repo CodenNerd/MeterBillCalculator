@@ -36,6 +36,42 @@ export function calculateBills(businesses, previous, current, misc = {}) {
   }
 }
 
+/**
+ * Compare the calculated (meter-based) total against the actual bill from
+ * the electricity office, and split the difference ("line loss") evenly
+ * across every business — regardless of how much each one consumed.
+ *
+ * @param {ReturnType<typeof calculateBills>} result
+ * @param {number} actualBill - the total figure from the electricity office
+ */
+export function applyLineLoss(result, actualBill) {
+  const { rows } = result
+  const calculatedUnitTotal = rows.reduce((sum, r) => sum + r.unitAmount, 0)
+  const lineLoss = actualBill - calculatedUnitTotal
+  const n = rows.length
+  const lineLossShare = n > 0 ? lineLoss / n : 0
+
+  const updatedRows = rows.map(row => {
+    const finalAmount = row.unitAmount + row.misc + lineLossShare
+    return {
+      ...row,
+      lineLossShare: +lineLossShare.toFixed(2),
+      finalAmount: +finalAmount.toFixed(2),
+    }
+  })
+
+  const totalFinalAmount = updatedRows.reduce((sum, r) => sum + r.finalAmount, 0)
+
+  return {
+    ...result,
+    rows: updatedRows,
+    actualBill: +actualBill.toFixed(2),
+    calculatedUnitTotal: +calculatedUnitTotal.toFixed(2),
+    lineLoss: +lineLoss.toFixed(2),
+    totalFinalAmount: +totalFinalAmount.toFixed(2),
+  }
+}
+
 export function formatNaira(n) {
   return '₦' + n.toLocaleString('en-NG', {
     minimumFractionDigits: 2,

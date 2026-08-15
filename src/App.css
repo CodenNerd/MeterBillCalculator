@@ -381,6 +381,10 @@
   background: rgba(0,0,0,0.15);
 }
 
+.table-head--with-loss {
+  grid-template-columns: 1fr 90px 90px 110px 100px 110px 130px;
+}
+
 .table-row {
   display: grid;
   grid-template-columns: 1fr 90px 90px 110px 100px 120px;
@@ -390,8 +394,14 @@
   transition: background 0.15s;
 }
 
+.table-row--with-loss {
+  grid-template-columns: 1fr 90px 90px 110px 100px 110px 130px;
+}
+
 .table-row:last-child { border-bottom: none; }
 .table-row:hover { background: rgba(255,255,255,0.02); }
+
+.cell-line-loss.negative { color: #ff8080; }
 
 .cell-biz {
   display: flex;
@@ -483,6 +493,119 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--amber);
+}
+
+/* ---- Line Loss Reconciliation ---- */
+.line-loss-card {
+  margin-top: 20px;
+  padding: 24px 28px;
+}
+
+.line-loss-card .card-header {
+  padding: 0 0 16px;
+  border-bottom: none;
+}
+
+.line-loss-hint {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.line-loss-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.line-loss-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.line-loss-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.line-loss-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+
+.loss-positive { color: var(--amber); }
+.loss-negative { color: #7fd88f; }
+
+/* ---- History Modal ---- */
+.history-dialog {
+  max-width: 560px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.history-dialog .card-header {
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--navy-border);
+  margin-bottom: 16px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item {
+  border: 1px solid var(--navy-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.history-item-head {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 100px 100px;
+  gap: 12px;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  color: var(--white);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: right;
+}
+
+.history-item-head > span:first-child {
+  text-align: left;
+}
+
+.history-item-head:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.history-detail {
+  border-top: 1px solid var(--navy-border);
+  padding: 8px 16px;
+}
+
+.history-detail-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 110px;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 13px;
+  text-align: right;
+}
+
+.history-detail-row > span:first-child {
+  text-align: left;
+  color: var(--muted);
 }
 
 /* ---- Overlay / Dialog ---- */
@@ -588,6 +711,7 @@
   .table-row > span:nth-child(3)::before,
   .table-row > .cell-units::before,
   .table-row > .cell-misc::before,
+  .table-row > .cell-line-loss::before,
   .table-row > .amount::before {
     display: block;
     font-size: 10px;
@@ -600,6 +724,7 @@
   .table-row > span:nth-child(3)::before { content: "Curr"; }
   .table-row > .cell-units::before { content: "Units"; }
   .table-row > .cell-misc::before { content: "Misc"; }
+  .table-row > .cell-line-loss::before { content: "Line Loss"; }
   .table-row > .amount::before { content: "Amount"; }
   .table-row .cell-units {
     align-items: flex-end;

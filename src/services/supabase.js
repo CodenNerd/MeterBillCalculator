@@ -97,3 +97,75 @@ export async function saveCycleReadings(currentReadings) {
 
   if (error) throw new Error(error.message)
 }
+
+/**
+ * Save a completed billing cycle: the electricity-office bill, the
+ * meter-calculated total, the resulting line loss, and each business's
+ * final breakdown for that cycle — so it can be looked back on later.
+ *
+ * @param {{ actualBill: number, calculatedUnitTotal: number, totalMisc: number, lineLoss: number }} summary
+ * @param {Array<{ id: number, name: string, prev: number, curr: number, units: number, unitAmount: number, misc: number, lineLossShare: number, finalAmount: number }>} rows
+ */
+export async function saveBillingCycle(summary, rows) {
+  const { data: cycle, error: cycleError } = await supabase
+    .from('billing_cycles')
+    .insert({
+      actual_bill: summary.actualBill,
+      calculated_total: summary.calculatedUnitTotal,
+      total_misc: summary.totalMisc,
+      line_loss: summary.lineLoss,
+    })
+    .select()
+    .single()
+
+  if (cycleError) throw new Error(cycleError.message)
+
+  const businessRows = rows.map(r => ({
+    cycle_id: cycle.id,
+    business_id: r.id,
+    business_name: r.name,
+    previous_reading: r.prev,
+    current_reading: r.curr,
+    units: r.units,
+    unit_amount: r.unitAmount,
+    misc: r.misc,
+    line_loss_share: r.lineLossShare ?? 0,
+    final_amount: r.finalAmount ?? (r.unitAmount + r.misc),
+  }))
+
+  const { error: rowsError } = await supabase
+    .from('cycle_business_bills')
+    .insert(businessRows)
+
+  if (rowsError) throw new Error(rowsError.message)
+
+  return cycle
+}
+
+/**
+ * Fetch past billing cycles, most recent first.
+ */
+export async function fetchCycleHistory() {
+  const { data, error } = await supabase
+    .from('billing_cycles')
+    .select('*')
+    .order('cycle_date', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/**
+ * Fetch the per-business breakdown for one billing cycle.
+ * @param {number} cycleId
+ */
+export async function fetchCycleDetail(cycleId) {
+  const { data, error } = await supabase
+    .from('cycle_business_bills')
+    .select('*')
+    .eq('cycle_id', cycleId)
+    .order('business_name', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data
+}
