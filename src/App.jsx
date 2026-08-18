@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from './hooks/useAuth'
 import { useBusinesses } from './hooks/useBusinesses'
 import { useStorage } from './hooks/useStorage'
 import { calculateBills, applyLineLoss, RATE_PER_UNIT } from './utils/billing'
@@ -12,14 +13,20 @@ import ResultsPage from './components/ResultsPage'
 import BillPage from './components/BillPage'
 import CycleHistory from './components/CycleHistory'
 import ConfirmDialog from './components/ConfirmDialog'
+import AddBusinessDialog from './components/AddBusinessDialog'
+import AuthGate from './components/AuthGate'
+import TenantPortal from './components/TenantPortal'
 import Toast from './components/Toast'
 import './App.css'
 
 export default function App() {
   const route = useHashRoute()
 
-  // Remote data — businesses + their previous readings
-  const { businesses, loading, error, add, rename, remove, setPrevious, saveCycle, reload } = useBusinesses()
+  const { session, role, complex, business, ready, authError } = useAuth()
+
+  // Remote data — businesses + their previous readings, scoped to this complex
+  const { businesses, loading, error, add, rename, remove, setPrevious, saveCycle, reload } =
+    useBusinesses(complex?.id)
 
   // Current readings still live locally (in-progress, not saved yet)
   const [current, setCurrent] = useStorage('mc_current', {})
@@ -32,6 +39,7 @@ export default function App() {
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(null)
   const [showHistory, setShowHistory] = useState(false)
+  const [showAddBusiness, setShowAddBusiness] = useState(false)
 
   // Build the shape InputGrid and calculateBills expect
   const bizList = businesses.map(b => ({ id: b.id, name: b.name }))
@@ -73,9 +81,12 @@ export default function App() {
     })
   }
 
-  async function handleAddBusiness() {
-    const saved = await add()
-    if (saved) showToast('New business added — click the name to rename it')
+  async function handleAddBusiness(biz) {
+    const saved = await add(biz)
+    if (saved) {
+      setShowAddBusiness(false)
+      showToast('New business added')
+    }
   }
 
   // ---- Calculate ----
@@ -150,7 +161,7 @@ export default function App() {
             lineLoss: hasLineLoss ? result.lineLoss : 0,
           }
 
-          await saveBillingCycle(summary, result.rows)
+          await saveBillingCycle(summary, result.rows, complex.id)
           await saveCycle(current)
           setCurrent({})
           setMisc({})
@@ -188,17 +199,49 @@ export default function App() {
     setTimeout(() => setToast(null), 3500)
   }
 
+  // ---- Auth gating ----
   // The shared bill page is fully self-contained (data lives in the URL) —
-  // render it without any of the app chrome or Supabase state.
+  // render it without any of the app chrome, auth, or Supabase state.
   if (route.path === 'bill') {
     return <BillPage encoded={route.params.d} />
   }
 
-  // ---- Loading / error states ----
-  if (loading) {
+  if (!ready) {
     return (
       <div className="app">
         <Header />
+        <div className="status-screen">
+          <div className="spinner" />
+          <p>Checking your account...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <AuthGate />
+  }
+
+  if (authError) {
+    return (
+      <div className="app">
+        <Header />
+        <div className="status-screen">
+          <p className="error-text">{authError}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (role === 'business') {
+    return <TenantPortal business={business} />
+  }
+
+  // ---- Admin app: loading / error states ----
+  if (loading) {
+    return (
+      <div className="app">
+        <Header complexName={complex?.name} showSignOut />
         <div className="status-screen">
           <div className="spinner" />
           <p>Loading readings...</p>
@@ -210,7 +253,7 @@ export default function App() {
   if (error) {
     return (
       <div className="app">
-        <Header />
+        <Header complexName={complex?.name} showSignOut />
         <div className="status-screen">
           <p className="error-text">{error}</p>
           <button className="btn btn-primary" onClick={reload}>Try Again</button>
@@ -221,7 +264,11 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header onShowHistory={() => setShowHistory(true)} />
+      <Header
+        complexName={complex?.name}
+        showSignOut
+        onShowHistory={() => setShowHistory(true)}
+      />
 
       {route.path === 'results' && result ? (
         <ResultsPage
@@ -247,7 +294,7 @@ export default function App() {
             onRename={handleRename}
             onRemove={handleRemove}
             onSetPrevious={handleSetPrevious}
-            onAddBusiness={handleAddBusiness}
+            onAddBusiness={() => setShowAddBusiness(true)}
             onCalculate={handleCalculate}
             onClear={handleClear}
           />
@@ -273,7 +320,14 @@ export default function App() {
         />
       )}
 
-      {showHistory && <CycleHistory onClose={() => setShowHistory(false)} />}
+      {showAddBusiness && (
+        <AddBusinessDialog
+          onAdd={handleAddBusiness}
+          onCancel={() => setShowAddBusiness(false)}
+        />
+      )}
+
+      {showHistory && <CycleHistory complexId={complex?.id} onClose={() => setShowHistory(false)} />}
 
       <Toast message={toast} />
     </div>

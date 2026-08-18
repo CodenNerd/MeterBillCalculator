@@ -65,6 +65,20 @@ export default function InputRow({ biz, previous, currentValue, miscValue, onCha
           )}
         </div>
 
+        <div className="input-wrap misc-wrap">
+          <label htmlFor={`misc-${biz.id}`}>Misc (₦) <span className="optional-tag">optional</span></label>
+          <input
+            id={`misc-${biz.id}`}
+            type="number"
+            className="reading-input misc-input"
+            placeholder="0.00"
+            value={miscValue ?? ''}
+            onChange={e => onMiscChange(biz.id, e.target.value)}
+            step="0.01"
+            min="0"
+          />
+        </div>
+
         <div className="input-wrap">
           <label htmlFor={`curr-${biz.id}`}>Current</label>
           <input
@@ -80,20 +94,6 @@ export default function InputRow({ biz, previous, currentValue, miscValue, onCha
           {!valid && (
             <span className="error-msg">Must be ≥ {prev.toFixed(2)}</span>
           )}
-        </div>
-
-        <div className="input-wrap misc-wrap">
-          <label htmlFor={`misc-${biz.id}`}>Misc (₦) <span className="optional-tag">optional</span></label>
-          <input
-            id={`misc-${biz.id}`}
-            type="number"
-            className="reading-input misc-input"
-            placeholder="0.00"
-            value={miscValue ?? ''}
-            onChange={e => onMiscChange(biz.id, e.target.value)}
-            step="0.01"
-            min="0"
-          />
         </div>
       </div>
 

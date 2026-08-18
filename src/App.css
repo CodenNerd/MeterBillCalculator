@@ -43,6 +43,14 @@
   letter-spacing: -0.5px;
 }
 
+.complex-badge {
+  font-size: 11px;
+  color: var(--muted);
+  border-left: 1px solid var(--navy-border);
+  padding-left: 10px;
+  margin-left: 2px;
+}
+
 .header-meta {
   display: flex;
   align-items: center;
@@ -518,6 +526,102 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--amber);
+}
+
+/* ---- Auth ---- */
+.auth-main {
+  max-width: 440px;
+  margin: 0 auto;
+  padding-top: 48px;
+}
+
+.auth-card {
+  padding: 32px;
+}
+
+.auth-role-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border: 1px solid var(--navy-border);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.auth-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.auth-tab.active {
+  background: var(--navy-border);
+  color: var(--white);
+}
+
+.auth-title {
+  margin-bottom: 4px;
+}
+
+.auth-subtitle {
+  margin-bottom: 16px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.auth-input {
+  width: 100%;
+}
+
+.auth-notice {
+  font-size: 13px;
+  color: var(--amber);
+  background: var(--amber-glow);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.btn-link {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 16px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.btn-link:hover { color: var(--white); }
+
+.tenant-msg {
+  padding: 0 28px 20px;
+}
+
+.tenant-history-list {
+  padding: 0 28px 24px;
+}
+
+.tenant-history-head {
+  cursor: default;
+}
+
+.tenant-bill-actions {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 /* ---- Results Page ---- */

@@ -6,13 +6,14 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 /**
- * Fetch all businesses with their previous readings from the DB.
- * Returns: [{ id, name, previous_reading }]
+ * Fetch all businesses for one complex, with their previous readings.
+ * Returns: [{ id, name, email, previous_reading }]
  */
-export async function fetchBusinesses() {
+export async function fetchBusinesses(complexId) {
   const { data, error } = await supabase
     .from('businesses')
     .select('*')
+    .eq('complex_id', complexId)
     .order('id', { ascending: true })
 
   if (error) throw new Error(error.message)
@@ -20,13 +21,15 @@ export async function fetchBusinesses() {
 }
 
 /**
- * Add a new business to the DB.
- * @param {{ id: number, name: string }} biz
+ * Add a new business to the DB. `id` is assigned by the database now
+ * (not the app) so businesses across different complexes never collide.
+ * @param {{ name: string, email?: string|null }} biz
+ * @param {string} complexId
  */
-export async function addBusiness(biz) {
+export async function addBusiness(biz, complexId) {
   const { data, error } = await supabase
     .from('businesses')
-    .insert({ id: biz.id, name: biz.name, previous_reading: 0 })
+    .insert({ name: biz.name, email: biz.email || null, previous_reading: 0, complex_id: complexId })
     .select()
     .single()
 
@@ -106,7 +109,7 @@ export async function saveCycleReadings(currentReadings) {
  * @param {{ actualBill: number, calculatedUnitTotal: number, totalMisc: number, lineLoss: number }} summary
  * @param {Array<{ id: number, name: string, prev: number, curr: number, units: number, unitAmount: number, misc: number, lineLossShare: number, finalAmount: number }>} rows
  */
-export async function saveBillingCycle(summary, rows) {
+export async function saveBillingCycle(summary, rows, complexId) {
   const { data: cycle, error: cycleError } = await supabase
     .from('billing_cycles')
     .insert({
@@ -114,6 +117,7 @@ export async function saveBillingCycle(summary, rows) {
       calculated_total: summary.calculatedUnitTotal,
       total_misc: summary.totalMisc,
       line_loss: summary.lineLoss,
+      complex_id: complexId,
     })
     .select()
     .single()
@@ -122,6 +126,7 @@ export async function saveBillingCycle(summary, rows) {
 
   const businessRows = rows.map(r => ({
     cycle_id: cycle.id,
+    complex_id: complexId,
     business_id: r.id,
     business_name: r.name,
     previous_reading: r.prev,
@@ -143,12 +148,13 @@ export async function saveBillingCycle(summary, rows) {
 }
 
 /**
- * Fetch past billing cycles, most recent first.
+ * Fetch past billing cycles for one complex, most recent first.
  */
-export async function fetchCycleHistory() {
+export async function fetchCycleHistory(complexId) {
   const { data, error } = await supabase
     .from('billing_cycles')
     .select('*')
+    .eq('complex_id', complexId)
     .order('cycle_date', { ascending: false })
 
   if (error) throw new Error(error.message)

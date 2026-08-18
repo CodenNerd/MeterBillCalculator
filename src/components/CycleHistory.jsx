@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { fetchCycleHistory, fetchCycleDetail } from '../services/supabase'
 import { formatNaira } from '../utils/billing'
 
-export default function CycleHistory({ onClose }) {
+export default function CycleHistory({ complexId, onClose }) {
   const [cycles, setCycles] = useState(null)
   const [error, setError] = useState(null)
   const [openId, setOpenId] = useState(null)
@@ -10,10 +10,10 @@ export default function CycleHistory({ onClose }) {
   const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
-    fetchCycleHistory()
+    fetchCycleHistory(complexId)
       .then(setCycles)
       .catch(() => setError('Failed to load cycle history.'))
-  }, [])
+  }, [complexId])
 
   async function toggleCycle(id) {
     if (openId === id) {

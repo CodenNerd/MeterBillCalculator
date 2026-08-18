@@ -9,24 +9,23 @@ import {
 } from '../services/supabase'
 
 /**
- * Manages all business data synced with Supabase.
- * Replaces the old useStorage hook for businesses and previous readings.
+ * Manages all business data synced with Supabase, scoped to one complex.
  */
-export function useBusinesses() {
+export function useBusinesses(complexId) {
   const [businesses, setBusinesses] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Load businesses from DB on mount
+  // Load businesses from DB whenever we know which complex we're in
   useEffect(() => {
-    load()
-  }, [])
+    if (complexId) load()
+  }, [complexId])
 
   async function load() {
     try {
       setLoading(true)
       setError(null)
-      const data = await fetchBusinesses()
+      const data = await fetchBusinesses(complexId)
       setBusinesses(data)
     } catch (err) {
       setError('Failed to load data. Check your connection.')
@@ -35,17 +34,14 @@ export function useBusinesses() {
     }
   }
 
-  async function add() {
-    const nextId = businesses.length > 0
-      ? Math.max(...businesses.map(b => b.id)) + 1
-      : 1
-    const newBiz = { id: nextId, name: `Business ${nextId}` }
+  async function add(biz) {
     try {
-      const saved = await addBusiness(newBiz)
+      const saved = await addBusiness(biz, complexId)
       setBusinesses(prev => [...prev, saved])
       return saved
     } catch (err) {
       setError('Failed to add business.')
+      throw err
     }
   }
 
