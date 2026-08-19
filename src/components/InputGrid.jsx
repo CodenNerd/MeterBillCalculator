@@ -27,10 +27,11 @@ export default function InputGrid({
       </div>
 
       <div className="input-grid">
-        {businesses.map(biz => (
+        {businesses.map((biz, index) => (
           <InputRow
             key={biz.id}
             biz={biz}
+            displayNumber={index + 1}
             previous={previous}
             currentValue={current[biz.id]}
             miscValue={misc[biz.id]}

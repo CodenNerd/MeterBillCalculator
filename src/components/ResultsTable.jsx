@@ -28,10 +28,11 @@ export default function ResultsTable({ result, flash, onSave, onPrint, onShareRo
           <span className="align-right">{hasLineLoss ? 'Final Amount' : 'Amount'}</span>
         </div>
 
-        {result.rows.map(row => (
+        {result.rows.map((row, index) => (
           <ResultRow
             key={row.id}
             row={row}
+            displayNumber={index + 1}
             maxUnits={maxUnits}
             hasLineLoss={hasLineLoss}
             onShare={onShareRow}

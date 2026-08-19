@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { isReadingValid } from '../utils/billing'
 
-export default function InputRow({ biz, previous, currentValue, miscValue, onChange, onMiscChange, onRename, onRemove, onSetPrevious }) {
+export default function InputRow({ biz, displayNumber, previous, currentValue, miscValue, onChange, onMiscChange, onRename, onRemove, onSetPrevious }) {
   const [editingName, setEditingName] = useState(false)
   const [editingPrev, setEditingPrev] = useState(false)
   const prev = previous[biz.id] ?? 0
@@ -21,7 +21,7 @@ export default function InputRow({ biz, previous, currentValue, miscValue, onCha
   return (
     <div className={`input-row ${!valid ? 'invalid' : ''}`}>
       <div className="biz-info">
-        <span className="biz-num">{biz.id}</span>
+        <span className="biz-num">{displayNumber}</span>
 
         {editingName ? (
           <input

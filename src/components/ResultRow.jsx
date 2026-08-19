@@ -1,12 +1,12 @@
 import { formatNaira } from '../utils/billing'
 
-export default function ResultRow({ row, maxUnits, hasLineLoss, onShare, onDownload }) {
+export default function ResultRow({ row, displayNumber, maxUnits, hasLineLoss, onShare, onDownload }) {
   const barWidth = row.units > 0 ? (row.units / maxUnits) * 100 : 0
 
   return (
     <div className={`table-row ${hasLineLoss ? 'table-row--with-loss' : ''}`}>
       <div className="cell-biz">
-        <span className="biz-num-sm">{row.id}</span>
+        <span className="biz-num-sm">{displayNumber}</span>
         <span>{row.name}</span>
         {(onShare || onDownload) && (
           <span className="row-share-icons">
