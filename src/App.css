@@ -128,10 +128,10 @@
 .complex-label {
   font-family: var(--font-display);
   font-size: 1.05rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--ink);
-  border-left: 2px solid var(--accent);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--ink-soft);
+  border-left: 1px solid var(--border);
   padding-left: 12px;
   white-space: nowrap;
   overflow: hidden;
@@ -542,10 +542,10 @@
 .home-kicker {
   font-family: var(--font-display);
   font-size: clamp(1.35rem, 3.5vw, 1.75rem);
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-weight: 400;
+  letter-spacing: -0.02em;
   text-transform: none;
-  color: var(--ink);
+  color: var(--ink-soft);
   margin-bottom: 10px;
   line-height: 1.15;
 }
