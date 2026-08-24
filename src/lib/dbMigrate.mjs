@@ -1,7 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import dns from 'node:dns'
+import { fileURLToPath } from 'node:url'
 import { Client } from 'pg'
+
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 /** Bump when supabase-bootstrap.sql changes meaningfully. */
 export const BOOTSTRAP_MIGRATION_ID = '2026-08-24-bootstrap'
@@ -85,11 +88,17 @@ async function connectFirstAvailable(urls) {
 }
 
 function readBootstrapSql() {
-  const sqlPath = path.join(process.cwd(), 'supabase-bootstrap.sql')
-  if (!fs.existsSync(sqlPath)) {
-    throw new Error(`Missing ${sqlPath}`)
+  const candidates = [
+    path.join(process.cwd(), 'supabase-bootstrap.sql'),
+    path.join(MODULE_DIR, '..', '..', 'supabase-bootstrap.sql'),
+    path.join(MODULE_DIR, 'supabase-bootstrap.sql'),
+  ]
+  for (const sqlPath of candidates) {
+    if (fs.existsSync(sqlPath)) return fs.readFileSync(sqlPath, 'utf8')
   }
-  return fs.readFileSync(sqlPath, 'utf8')
+  throw new Error(
+    `Missing supabase-bootstrap.sql (tried: ${candidates.join(', ')})`,
+  )
 }
 
 /**

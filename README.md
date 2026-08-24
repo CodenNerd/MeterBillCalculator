@@ -12,14 +12,16 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) after filling `.env` with a real Supabase project.
 
-Schema migrations run automatically when the Node server starts (`src/instrumentation.js`), using `POSTGRES_URL*` or `POSTGRES_PASSWORD`. They are tracked in `public.schema_migrations` and are idempotent. To run manually (or re-apply):
+Schema migrations run during **`npm run build`** (including Vercel redeploys) and again on local Node server start. They use `POSTGRES_URL*` / `POSTGRES_PASSWORD`, are tracked in `public.schema_migrations`, and are idempotent.
+
+On Vercel, the Supabase integration must provide `POSTGRES_URL` or `POSTGRES_URL_NON_POOLING` (or set `POSTGRES_PASSWORD`). A deploy without those vars fails the migrate step so an empty schema is not silent.
 
 ```bash
 npm run db:migrate
 npm run db:migrate -- --force
 ```
 
-Set `SKIP_DB_MIGRATE=1` to disable auto-migrate. You can still paste `supabase-bootstrap.sql` into the Supabase SQL Editor if you prefer.
+Set `SKIP_DB_MIGRATE=1` to disable. You can still paste `supabase-bootstrap.sql` into the Supabase SQL Editor if you prefer.
 
 1. Sign in at `/superadmin` with `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`
 2. Create a plaza and set the plaza admin email + password
@@ -82,7 +84,7 @@ Legacy hash links (`#/cycles/...`) are redirected to the path form on load.
 
 ## Scripts
 
-- `npm run dev` — development server (port 3000); auto-migrates schema on boot
-- `npm run build` — production build
-- `npm start` — serve production build; auto-migrates schema on boot
+- `npm run dev` — development server (port 3000); migrates on boot when DB creds exist
+- `npm run build` — production build **then** apply schema (used by Vercel)
+- `npm start` — serve production build; migrates on boot when DB creds exist
 - `npm run db:migrate` — apply schema now (`--force` to re-run bootstrap)

@@ -3,8 +3,8 @@
  * Prefer: POSTGRES_URL / POSTGRES_URL_NON_POOLING from Vercel ↔ Supabase.
  * Or: POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL) to try pooler hosts.
  *
- * Also runs automatically on Node server start (see src/instrumentation.js).
- * Skip with SKIP_DB_MIGRATE=1.
+ * Runs on Vercel during `next build` (see package.json) and on Node server
+ * start locally (see src/instrumentation.js). Skip with SKIP_DB_MIGRATE=1.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -35,22 +35,28 @@ loadEnvFile('.env.local')
 loadEnvFile('.env')
 
 const force = process.argv.includes('--force')
+const onVercel = Boolean(process.env.VERCEL)
 
 try {
   const result = await ensureDatabaseMigrated({ force })
   if (result.status === 'skipped') {
-    console.error(
-      result.reason === 'no-credentials'
-        ? 'No Postgres URL/password. Set POSTGRES_URL or POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL).'
-        : `Skipped: ${result.reason}`,
-    )
-    if (result.reason === 'no-credentials') process.exit(1)
+    if (result.reason === 'no-credentials') {
+      const msg =
+        'No Postgres URL/password. Set POSTGRES_URL or POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL).'
+      if (onVercel) {
+        console.error(`[migrate] ${msg} Required on Vercel for schema deploy.`)
+        process.exit(1)
+      }
+      console.warn(`[migrate] ${msg} Skipping (local).`)
+      process.exit(0)
+    }
+    console.log(`[migrate] Skipped: ${result.reason}`)
   } else if (result.status === 'already-applied') {
-    console.log(`Already applied: ${result.id} (pass --force to re-run)`)
+    console.log(`[migrate] Already applied: ${result.id} (pass --force to re-run)`)
   } else if (result.status === 'applied') {
-    console.log(`Applied: ${result.id}`)
+    console.log(`[migrate] Applied: ${result.id}`)
   }
 } catch (err) {
-  console.error('Migration failed:', err.message || err)
+  console.error('[migrate] Migration failed:', err.message || err)
   process.exit(1)
 }
