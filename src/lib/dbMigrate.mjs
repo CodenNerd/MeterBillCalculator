@@ -147,6 +147,33 @@ export function candidateDatabaseUrls(env = process.env) {
   return resolveDatabaseTargets(env).urls
 }
 
+/**
+ * Vercel/Supabase URLs often include sslmode=require. Recent `pg` treats that like
+ * verify-full, which fails on Supabase's certificate chain (SELF_SIGNED_CERT_IN_CHAIN).
+ * Strip sslmode from the URL and force TLS without CA verification.
+ */
+function connectionConfig(connectionString) {
+  let cleaned = connectionString
+  try {
+    const u = new URL(connectionString)
+    u.searchParams.delete('sslmode')
+    u.searchParams.delete('ssl')
+    u.searchParams.delete('uselibpqcompat')
+    cleaned = u.toString()
+  } catch {
+    cleaned = String(connectionString)
+      .replace(/([?&])sslmode=[^&]*/gi, '$1')
+      .replace(/([?&])ssl=[^&]*/gi, '$1')
+      .replace(/[?&]$/, '')
+      .replace(/\?&/, '?')
+  }
+  return {
+    connectionString: cleaned,
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 12000,
+  }
+}
+
 async function connectFirstAvailable(urls) {
   try {
     dns.setDefaultResultOrder('ipv4first')
@@ -158,11 +185,7 @@ async function connectFirstAvailable(urls) {
   log('info', `Connecting… (${urls.length} candidate host(s))`)
   for (const connectionString of urls) {
     const host = hostFromUrl(connectionString)
-    const client = new Client({
-      connectionString,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 12000,
-    })
+    const client = new Client(connectionConfig(connectionString))
     try {
       await client.connect()
       log('info', `Connected to ${host}`)
