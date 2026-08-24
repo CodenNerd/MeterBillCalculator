@@ -63,19 +63,19 @@ Apply `supabase-migration-plazas.sql` on Supabase (adds `slug`, owner email, RLS
 
 Published cycles use: `/{plazaSlug}/cycles/{id}`.
 
-Each cycle / invoice page exposes:
+Each cycle page exposes:
 
-- `generateMetadata` — title + description + absolute `og:image`
-- `…/opengraph-image` — **screenshot** of a dedicated `…/og-frame` page (real UI via headless Chromium), with a simple ImageResponse fallback if capture fails
+- `generateMetadata` — title + description (office bill, offset)
+- `/{plazaSlug}/cycles/{id}/opengraph-image` — dynamic 1200×630 preview (totals + top tenants)
 
 WhatsApp only fetches these over **public HTTPS**. For real previews:
 
 1. Deploy (e.g. Vercel) with Supabase + superadmin env vars
-2. Set `NEXT_PUBLIC_SITE_URL` to that deployment origin (Chromium also uses `VERCEL_URL` when present)
+2. Set `NEXT_PUBLIC_SITE_URL` to that deployment origin
 3. Publish a cycle and share `/{slug}/cycles/{id}` (or use **WhatsApp** on the bills page)
 4. If an old empty preview is cached, share a new cycle id or wait for WhatsApp’s cache to expire
 
-Local tip: keep `npm run dev` running and `NEXT_PUBLIC_SITE_URL=http://localhost:3000` so OG screenshots can load `…/og-frame`.
+Legacy hash links (`#/cycles/...`) are redirected to the path form on load.
 
 ## Payments & settings
 

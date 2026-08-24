@@ -16,7 +16,6 @@ export default function InvoiceCard({
   settings,
   evidenceUrl,
   onBack,
-  ogMode = false,
 }) {
   const rate = Number(settings?.rate_per_unit) > 0
     ? Number(settings.rate_per_unit)
@@ -31,21 +30,19 @@ export default function InvoiceCard({
   const curr = Number(bill.current_reading) || 0
 
   return (
-    <main className={`main main--invoice ${ogMode ? 'main--og' : ''}`}>
-      {!ogMode && (
-        <div className="page-nav no-print">
-          <button type="button" className="btn-text" onClick={onBack}>
-            ← Back to timeline
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm btn-primary"
-            onClick={() => window.print()}
-          >
-            Print / Save PDF
-          </button>
-        </div>
-      )}
+    <main className="main main--invoice">
+      <div className="page-nav no-print">
+        <button type="button" className="btn-text" onClick={onBack}>
+          ← Back to timeline
+        </button>
+        <button
+          type="button"
+          className="btn btn-sm btn-primary"
+          onClick={() => window.print()}
+        >
+          Print / Save PDF
+        </button>
+      </div>
 
       <article className="invoice-card invoice-card--print">
         <header className="invoice-head">
