@@ -5,7 +5,15 @@ import { RATE_PER_UNIT, tenantNameForBill } from '../../../../../../utils/billin
 export const runtime = 'nodejs'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
-export const revalidate = 60
+/** Cache generated OG images for 12 hours. */
+export const revalidate = 43200
+
+const ogResponseOptions = {
+  ...size,
+  headers: {
+    'Cache-Control': 'public, max-age=43200, s-maxage=43200, stale-while-revalidate=86400',
+  },
+}
 
 function naira(n) {
   const v = Number(n) || 0
@@ -57,7 +65,7 @@ export default async function Image({ params }) {
           <div style={{ fontSize: 26, marginTop: 12, color: '#6b7c72' }}>Invoice</div>
         </div>
       ),
-      { ...size },
+      ogResponseOptions,
     )
   }
 
@@ -261,6 +269,6 @@ export default async function Image({ params }) {
         </div>
       </div>
     ),
-    { ...size },
+    ogResponseOptions,
   )
 }
