@@ -53,7 +53,7 @@ export default async function Image({ params }) {
             fontFamily: 'Georgia, serif',
           }}
         >
-          <div style={{ fontSize: 56, fontWeight: 600 }}>MeterCalc</div>
+          <div style={{ fontSize: 56, fontWeight: 600 }}>PlazaBills</div>
           <div style={{ fontSize: 26, marginTop: 12, color: '#6b7c72' }}>Invoice</div>
         </div>
       ),

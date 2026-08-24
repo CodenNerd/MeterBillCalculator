@@ -52,7 +52,7 @@ export default async function Image({ params }) {
             fontFamily: 'Georgia, serif',
           }}
         >
-          <div style={{ fontSize: 64, fontWeight: 600 }}>MeterCalc</div>
+          <div style={{ fontSize: 64, fontWeight: 600 }}>PlazaBills</div>
           <div style={{ fontSize: 28, marginTop: 16, color: '#6b7c72' }}>
             Electricity billing
           </div>

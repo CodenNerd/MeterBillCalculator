@@ -1,6 +1,8 @@
-# MeterCalc
+# MeterCalc / PlazaBills
 
 Shared-building electricity billing. Next.js App Router so published cycle links get real WhatsApp / Open Graph previews.
+
+The product name in the UI is **PlazaBills**.
 
 ## Setup
 

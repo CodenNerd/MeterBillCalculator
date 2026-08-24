@@ -8,7 +8,7 @@ import { plazaPath } from '../utils/plaza'
 function Wordmark({ className = '' }) {
   return (
     <span className={`wordmark ${className}`.trim()}>
-      Meter<span className="wordmark-calc">Calc</span>
+      Plaza<span className="wordmark-calc">Bills</span>
     </span>
   )
 }

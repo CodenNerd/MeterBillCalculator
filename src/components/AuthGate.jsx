@@ -52,27 +52,38 @@ export default function AuthGate() {
               <>
                 <h2 className="card-title auth-title">Sign in</h2>
                 <p className="card-sub auth-subtitle">
-                  Plaza admins use the login created by a superadmin. Superadmins use the
-                  credentials configured on the server.
+                  Enter your email and password to continue.
                 </p>
 
-                <form onSubmit={handleSubmit} className="auth-form">
+                <form
+                  onSubmit={handleSubmit}
+                  className="auth-form"
+                  method="post"
+                  action="/sign-in"
+                  name="login"
+                  autoComplete="on"
+                >
                   <div className="input-wrap">
-                    <label htmlFor="auth-email">Email</label>
+                    <label htmlFor="username">Email</label>
                     <input
-                      id="auth-email"
+                      id="username"
+                      name="username"
                       type="email"
+                      inputMode="email"
                       className="reading-input auth-input"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       required
                       autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
                     />
                   </div>
                   <div className="input-wrap">
-                    <label htmlFor="auth-password">Password</label>
+                    <label htmlFor="password">Password</label>
                     <input
-                      id="auth-password"
+                      id="password"
+                      name="password"
                       type="password"
                       className="reading-input auth-input"
                       value={password}

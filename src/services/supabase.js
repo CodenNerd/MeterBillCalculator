@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseUrl, getSupabasePublishableKey, isSupabaseConfigured } from '../lib/env'
-import { isValidPlazaSlug } from '../utils/plaza'
 
 const SUPABASE_URL = getSupabaseUrl()
 const SUPABASE_PUBLISHABLE_KEY = getSupabasePublishableKey()
@@ -591,28 +590,40 @@ export async function createPlaza({ name, slug, ownerEmail, ownerPassword }) {
   return payload.plaza
 }
 
+/**
+ * Superadmin: update plaza details and/or plaza admin credentials.
+ * Omit ownerPassword to leave the password unchanged.
+ */
 export async function updatePlaza(plazaId, patch) {
-  const payload = {}
-  if (patch.name != null) payload.name = patch.name
-  if (patch.slug != null) {
-    if (!isValidPlazaSlug(patch.slug)) throw new Error('Invalid plaza slug')
-    payload.slug = patch.slug
-  }
-  if (patch.owner_email !== undefined) {
-    payload.owner_email = patch.owner_email
-      ? String(patch.owner_email).trim().toLowerCase()
-      : null
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) {
+    throw new Error('You must be signed in as superadmin to update a plaza.')
   }
 
-  const { data, error } = await supabase
-    .from('complexes')
-    .update(payload)
-    .eq('id', plazaId)
-    .select()
-    .single()
+  const body = {}
+  if (patch.name != null) body.name = patch.name
+  if (patch.slug != null) body.slug = patch.slug
+  if (patch.ownerEmail !== undefined || patch.owner_email !== undefined) {
+    body.ownerEmail = patch.ownerEmail ?? patch.owner_email
+  }
+  if (patch.ownerPassword !== undefined || patch.owner_password !== undefined) {
+    body.ownerPassword = patch.ownerPassword ?? patch.owner_password
+  }
 
-  if (error) throw new Error(error.message)
-  return data
+  const res = await fetch(`/api/superadmin/plazas/${plazaId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(payload.error || 'Could not update plaza')
+  }
+  return payload.plaza
 }
 
 /** Fetch cycle and ensure it belongs to the plaza identified by slug. */

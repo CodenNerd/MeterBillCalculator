@@ -2,11 +2,111 @@
 
 import { useEffect, useState } from 'react'
 import { useBilling } from '../../components/providers/BillingProvider'
-import { createPlaza, listPlazas } from '../../services/supabase'
+import { createPlaza, listPlazas, updatePlaza } from '../../services/supabase'
 import { navigate } from '../../utils/navigation'
 import { slugifyPlazaName, isValidPlazaSlug, plazaPath } from '../../utils/plaza'
 import { signOut } from '../../services/auth'
+import { Wordmark } from '../../components/Header'
 import AuthGate from '../../components/AuthGate'
+
+function PlazaEditForm({ plaza, onSaved, onCancel }) {
+  const [name, setName] = useState(plaza.name || '')
+  const [slug, setSlug] = useState(plaza.slug || '')
+  const [ownerEmail, setOwnerEmail] = useState(plaza.owner_email || '')
+  const [ownerPassword, setOwnerPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function handleSave(e) {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const patch = {
+        name,
+        slug,
+        ownerEmail,
+      }
+      if (ownerPassword.trim()) {
+        patch.ownerPassword = ownerPassword
+      }
+      const updated = await updatePlaza(plaza.id, patch)
+      onSaved(updated)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSave} className="auth-form plaza-edit-form" autoComplete="off">
+      <div className="input-wrap">
+        <label htmlFor={`edit-name-${plaza.id}`}>Name</label>
+        <input
+          id={`edit-name-${plaza.id}`}
+          className="reading-input"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          required
+        />
+      </div>
+      <div className="input-wrap">
+        <label htmlFor={`edit-slug-${plaza.id}`}>URL slug</label>
+        <input
+          id={`edit-slug-${plaza.id}`}
+          className="reading-input"
+          value={slug}
+          onChange={e => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+          required
+        />
+        <p className="alloc-hint">
+          {isValidPlazaSlug(slug)
+            ? `Path: /${slug}/`
+            : 'Use lowercase letters, numbers, and hyphens.'}
+        </p>
+      </div>
+      <div className="input-wrap">
+        <label htmlFor={`edit-email-${plaza.id}`}>Plaza admin email</label>
+        <input
+          id={`edit-email-${plaza.id}`}
+          type="email"
+          className="reading-input"
+          value={ownerEmail}
+          onChange={e => setOwnerEmail(e.target.value)}
+          required
+          autoComplete="off"
+        />
+      </div>
+      <div className="input-wrap">
+        <label htmlFor={`edit-password-${plaza.id}`}>New admin password</label>
+        <input
+          id={`edit-password-${plaza.id}`}
+          type="password"
+          className="reading-input"
+          value={ownerPassword}
+          onChange={e => setOwnerPassword(e.target.value)}
+          minLength={6}
+          autoComplete="new-password"
+          placeholder="Leave blank to keep current password"
+        />
+      </div>
+      {error && <p className="error-text">{error}</p>}
+      <div className="plaza-edit-actions">
+        <button
+          type="submit"
+          className="btn btn-primary btn-sm"
+          disabled={busy || !isValidPlazaSlug(slug) || !ownerEmail}
+        >
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={onCancel} disabled={busy}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
 
 export default function SuperadminPage() {
   const { session, role, ready } = useBilling()
@@ -18,6 +118,7 @@ export default function SuperadminPage() {
   const [ownerPassword, setOwnerPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [slugTouched, setSlugTouched] = useState(false)
+  const [editingId, setEditingId] = useState(null)
 
   useEffect(() => {
     if (!ready) return
@@ -85,7 +186,7 @@ export default function SuperadminPage() {
       <header className="header">
         <div className="header-inner">
           <div className="logo">
-            <span className="wordmark">Meter<span className="wordmark-calc">Calc</span></span>
+            <Wordmark />
             <span className="complex-label">Superadmin</span>
           </div>
           <div className="header-meta">
@@ -100,14 +201,18 @@ export default function SuperadminPage() {
         <header className="cycle-page-titles">
           <h1 className="page-title">Plazas</h1>
           <p className="page-lede">
-            Create plazas (buildings / shared tenancies). Each gets a URL like{' '}
-            <code>/kmsplaza/</code>. You set the plaza admin email and password here.
+            Create and manage plazas. Each gets a URL like <code>/kmsplaza/</code>.
           </p>
         </header>
 
         <section className="card" style={{ padding: 24 }}>
           <h2 className="section-title">Create plaza</h2>
-          <form onSubmit={handleCreate} className="auth-form" style={{ marginTop: 16 }}>
+          <form
+            onSubmit={handleCreate}
+            className="auth-form"
+            style={{ marginTop: 16 }}
+            autoComplete="off"
+          >
             <div className="input-wrap">
               <label htmlFor="plaza-name">Name</label>
               <input
@@ -121,6 +226,7 @@ export default function SuperadminPage() {
                 }}
                 required
                 placeholder="KMS Plaza"
+                autoComplete="off"
               />
             </div>
             <div className="input-wrap">
@@ -135,6 +241,7 @@ export default function SuperadminPage() {
                 }}
                 required
                 placeholder="kmsplaza"
+                autoComplete="off"
               />
               <p className="alloc-hint">
                 {isValidPlazaSlug(slug)
@@ -151,7 +258,8 @@ export default function SuperadminPage() {
                 value={ownerEmail}
                 onChange={e => setOwnerEmail(e.target.value)}
                 required
-                placeholder="admin@kmsplaza.com"
+                placeholder="admin@example.com"
+                autoComplete="off"
               />
             </div>
             <div className="input-wrap">
@@ -165,12 +273,7 @@ export default function SuperadminPage() {
                 required
                 minLength={6}
                 autoComplete="new-password"
-                placeholder="At least 6 characters"
               />
-              <p className="alloc-hint">
-                Give these credentials to the plaza admin. They sign in on the home page —
-                no self-signup.
-              </p>
             </div>
             {error && <p className="error-text">{error}</p>}
             <button
@@ -201,29 +304,56 @@ export default function SuperadminPage() {
                 <li
                   key={p.id}
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: 16,
                     padding: '14px 22px',
                     borderTop: '1px solid var(--border)',
                   }}
                 >
-                  <div>
-                    <strong>{p.name}</strong>
-                    <div className="muted" style={{ fontSize: '0.85rem' }}>
-                      /{p.slug}
-                      {p.owner_email ? ` · admin ${p.owner_email}` : ''}
-                      {p.owner_id ? ' · provisioned' : ' · pending'}
+                  {editingId === p.id ? (
+                    <PlazaEditForm
+                      plaza={p}
+                      onCancel={() => setEditingId(null)}
+                      onSaved={updated => {
+                        setPlazas(prev =>
+                          (prev || []).map(row => (row.id === updated.id ? updated : row)),
+                        )
+                        setEditingId(null)
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 16,
+                      }}
+                    >
+                      <div>
+                        <strong>{p.name}</strong>
+                        <div className="muted" style={{ fontSize: '0.85rem' }}>
+                          /{p.slug}
+                          {p.owner_email ? ` · admin ${p.owner_email}` : ''}
+                          {p.owner_id ? ' · provisioned' : ' · pending'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => setEditingId(p.id)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => navigate(plazaPath(p.slug, '/'))}
+                        >
+                          Open
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-ghost"
-                    onClick={() => navigate(plazaPath(p.slug, '/'))}
-                  >
-                    Open
-                  </button>
+                  )}
                 </li>
               ))}
             </ul>
