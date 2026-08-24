@@ -1,42 +1,23 @@
 import { formatNaira } from '../utils/billing'
 
-export default function ResultRow({ row, displayNumber, maxUnits, hasLineLoss, onShare, onDownload }) {
+export default function ResultRow({ row, displayNumber, maxUnits, hasLineLoss, onClick, interactive }) {
   const barWidth = row.units > 0 ? (row.units / maxUnits) * 100 : 0
+  const Tag = onClick ? 'button' : 'div'
 
   return (
-    <div className={`table-row ${hasLineLoss ? 'table-row--with-loss' : ''}`}>
+    <Tag
+      type={onClick ? 'button' : undefined}
+      className={`table-row ${hasLineLoss ? 'table-row--with-loss' : ''} ${interactive || onClick ? 'table-row--clickable' : ''}`}
+      onClick={onClick}
+    >
       <div className="cell-biz">
         <span className="biz-num-sm">{displayNumber}</span>
         <span>{row.name}</span>
-        {(onShare || onDownload) && (
-          <span className="row-share-icons">
-            {onShare && (
-              <button
-                type="button"
-                className="icon-btn"
-                title="Share link with this business"
-                onClick={() => onShare(row)}
-              >
-                🔗
-              </button>
-            )}
-            {onDownload && (
-              <button
-                type="button"
-                className="icon-btn"
-                title="Download bill image"
-                onClick={() => onDownload(row)}
-              >
-                ⬇
-              </button>
-            )}
-          </span>
-        )}
       </div>
       <span className="align-right mono muted">{row.prev.toFixed(2)}</span>
       <span className="align-right mono">{row.curr.toFixed(2)}</span>
       <div className="cell-units align-right">
-        <span className="mono">{row.units.toFixed(2)}</span>
+        <span className="mono">{row.units.toFixed(2)} kWh</span>
         <div className="spark-bar">
           <div className="spark-fill" style={{ width: `${barWidth}%` }} />
         </div>
@@ -50,6 +31,6 @@ export default function ResultRow({ row, displayNumber, maxUnits, hasLineLoss, o
       <span className="align-right mono amount">
         {formatNaira(hasLineLoss ? row.finalAmount : row.amount)}
       </span>
-    </div>
+    </Tag>
   )
 }

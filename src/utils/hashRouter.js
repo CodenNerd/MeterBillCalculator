@@ -1,20 +1,35 @@
 import { useEffect, useState } from 'react'
 
 /**
- * A minimal hash-based router — no external dependency needed.
- * Routes look like:  #/            -> input page
- *                     #/results    -> full billing summary page
- *                     #/bill?d=... -> a single business's standalone bill page
+ * Hash router.
+ *   #/                 -> home
+ *   #/cycle            -> worksheet
+ *   #/cycles/draft     -> draft bills table
+ *   #/cycles/:id       -> published/concluded bills (stable share)
+ *   #/businesses/:id   -> business bill timeline
+ *   #/bills?d=...      -> legacy snapshot share
  */
 export function parseHash(hash) {
   const clean = (hash || '').replace(/^#\/?/, '')
-  const [path, queryString] = clean.split('?')
+  const [pathPart, queryString] = clean.split('?')
   const params = Object.fromEntries(new URLSearchParams(queryString || ''))
-  return { path: path || '', params }
+  const segments = (pathPart || '').split('/').filter(Boolean)
+
+  let path = segments[0] || ''
+  if (path === 'cycles' && segments[1]) {
+    params.id = segments[1]
+    path = 'cycles'
+  }
+  if (path === 'businesses' && segments[1]) {
+    params.id = segments[1]
+    path = 'businesses'
+  }
+
+  return { path, params, segments }
 }
 
 export function navigate(path) {
-  window.location.hash = path
+  window.location.hash = path.startsWith('/') ? path : `/${path}`
 }
 
 export function useHashRoute() {

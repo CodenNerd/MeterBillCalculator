@@ -1,12 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../services/supabase'
-import { ensureComplex, claimBusinessRow, onAuthStateChange } from '../services/auth'
+import { ensureComplex, onAuthStateChange } from '../services/auth'
 
 export function useAuth() {
   const [session, setSession] = useState(null)
   const [role, setRole] = useState(null)
   const [complex, setComplex] = useState(null)
-  const [business, setBusiness] = useState(null)
   const [ready, setReady] = useState(false)
   const [authError, setAuthError] = useState(null)
 
@@ -14,7 +13,6 @@ export function useAuth() {
     if (!sess) {
       setRole(null)
       setComplex(null)
-      setBusiness(null)
       setReady(true)
       return
     }
@@ -23,13 +21,12 @@ export function useAuth() {
     setRole(userRole)
     setAuthError(null)
     try {
-      if (userRole === 'admin') {
-        const c = await ensureComplex(user)
-        setComplex(c)
-      } else {
-        const b = await claimBusinessRow(user)
-        setBusiness(b)
+      if (userRole !== 'admin') {
+        setAuthError('This account is not an admin account. Sign in with a complex admin login.')
+        return
       }
+      const c = await ensureComplex(user)
+      setComplex(c)
     } catch (err) {
       setAuthError(err.message)
     } finally {
@@ -52,5 +49,5 @@ export function useAuth() {
     return () => subscription.unsubscribe()
   }, [resolveContext])
 
-  return { session, role, complex, business, ready, authError, setComplex }
+  return { session, role, complex, ready, authError, setComplex }
 }

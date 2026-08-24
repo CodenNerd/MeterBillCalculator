@@ -1,6 +1,9 @@
 export const RATE_PER_UNIT = 250 // ₦ per kWh
 
-export function calculateBills(businesses, previous, current, misc = {}) {
+export const ALLOCATION_EQUAL = 'equal'
+export const ALLOCATION_PROPORTIONAL = 'proportional'
+
+export function calculateBills(businesses, previous, current, misc = {}, notes = {}) {
   let totalUnits = 0
   let totalMisc = 0
   let totalAmount = 0
@@ -12,6 +15,7 @@ export function calculateBills(businesses, previous, current, misc = {}) {
     const unitAmount = units * RATE_PER_UNIT
     const miscBill = Math.max(0, parseFloat(misc[biz.id]) || 0)
     const amount = unitAmount + miscBill
+    const note = notes[biz.id] != null ? String(notes[biz.id]) : ''
 
     totalUnits += units
     totalMisc += miscBill
@@ -23,6 +27,7 @@ export function calculateBills(businesses, previous, current, misc = {}) {
       curr,
       units: +units.toFixed(2),
       misc: +miscBill.toFixed(2),
+      note,
       unitAmount: +unitAmount.toFixed(2),
       amount: +amount.toFixed(2),
     }
@@ -36,27 +41,64 @@ export function calculateBills(businesses, previous, current, misc = {}) {
   }
 }
 
+function round2(n) {
+  return Math.round(n * 100) / 100
+}
+
 /**
  * Compare the calculated (meter-based) total against the actual bill from
- * the electricity office, and split the difference ("line loss") evenly
- * across every business — regardless of how much each one consumed.
+ * the electricity office, and split the difference ("line loss") either
+ * evenly or proportional to each business's energy charge.
+ *
+ * The last row absorbs any kobo remainder so shares sum to the office bill
+ * gap (line loss) exactly when added to unit totals.
  *
  * @param {ReturnType<typeof calculateBills>} result
  * @param {number} actualBill - the total figure from the electricity office
+ * @param {'equal'|'proportional'} [method]
  */
-export function applyLineLoss(result, actualBill) {
+export function applyLineLoss(result, actualBill, method = ALLOCATION_EQUAL) {
   const { rows } = result
   const calculatedUnitTotal = rows.reduce((sum, r) => sum + r.unitAmount, 0)
   const lineLoss = actualBill - calculatedUnitTotal
   const n = rows.length
-  const lineLossShare = n > 0 ? lineLoss / n : 0
 
-  const updatedRows = rows.map(row => {
-    const finalAmount = row.unitAmount + row.misc + lineLossShare
+  if (n === 0) {
+    return {
+      ...result,
+      rows: [],
+      actualBill: +actualBill.toFixed(2),
+      calculatedUnitTotal: +calculatedUnitTotal.toFixed(2),
+      lineLoss: +lineLoss.toFixed(2),
+      allocationMethod: method,
+      totalFinalAmount: 0,
+    }
+  }
+
+  const useProportional =
+    method === ALLOCATION_PROPORTIONAL && calculatedUnitTotal > 0
+
+  const rawShares = rows.map(row => {
+    if (useProportional) {
+      return lineLoss * (row.unitAmount / calculatedUnitTotal)
+    }
+    return lineLoss / n
+  })
+
+  // Round all but the last; last gets the remainder so shares sum to lineLoss
+  const roundedShares = rawShares.map((s, i) =>
+    i === n - 1 ? 0 : round2(s)
+  )
+  const allocated = roundedShares.slice(0, -1).reduce((sum, s) => sum + s, 0)
+  roundedShares[n - 1] = round2(lineLoss - allocated)
+
+  const updatedRows = rows.map((row, i) => {
+    const lineLossShare = roundedShares[i]
+    const finalAmount = round2(row.unitAmount + row.misc + lineLossShare)
     return {
       ...row,
-      lineLossShare: +lineLossShare.toFixed(2),
-      finalAmount: +finalAmount.toFixed(2),
+      lineLossShare,
+      finalAmount,
     }
   })
 
@@ -68,8 +110,23 @@ export function applyLineLoss(result, actualBill) {
     actualBill: +actualBill.toFixed(2),
     calculatedUnitTotal: +calculatedUnitTotal.toFixed(2),
     lineLoss: +lineLoss.toFixed(2),
+    allocationMethod: useProportional ? ALLOCATION_PROPORTIONAL : ALLOCATION_EQUAL,
     totalFinalAmount: +totalFinalAmount.toFixed(2),
   }
+}
+
+/**
+ * Live worksheet result: meter bills, optionally with office-bill reconciliation.
+ * @param {string|number} actualBillInput - raw input; empty/invalid skips line loss
+ * @param {'equal'|'proportional'} method
+ */
+export function computeCycleResult(businesses, previous, current, misc, actualBillInput, method, notes = {}) {
+  const base = calculateBills(businesses, previous, current, misc, notes)
+  const parsed = parseFloat(actualBillInput)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return base
+  }
+  return applyLineLoss(base, parsed, method)
 }
 
 export function formatNaira(n) {
@@ -79,7 +136,36 @@ export function formatNaira(n) {
   })
 }
 
+export function formatKwh(n) {
+  return `${Number(n).toFixed(2)} kWh`
+}
+
+export function defaultCycleName(dateInput = new Date()) {
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput)
+  if (Number.isNaN(d.getTime())) {
+    return new Date().toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
+  }
+  return d.toLocaleDateString('en-NG', { month: 'long', year: 'numeric' })
+}
+
+export function toDateInputValue(dateInput = new Date()) {
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput)
+  if (Number.isNaN(d.getTime())) {
+    return new Date().toISOString().slice(0, 10)
+  }
+  return d.toISOString().slice(0, 10)
+}
+
 export function isReadingValid(current, previous) {
   if (current === '' || current === undefined) return true
   return parseFloat(current) >= previous
+}
+
+export function hasDraftProgress(current, misc, actualBill, notes = {}) {
+  const hasReading = Object.values(current || {}).some(v => v !== '' && v != null && String(v).length > 0)
+  const hasMisc = Object.values(misc || {}).some(v => v !== '' && v != null && parseFloat(v) > 0)
+  const hasNote = Object.values(notes || {}).some(v => v != null && String(v).trim().length > 0)
+  const bill = parseFloat(actualBill)
+  const hasBill = Number.isFinite(bill) && bill > 0
+  return hasReading || hasMisc || hasNote || hasBill
 }

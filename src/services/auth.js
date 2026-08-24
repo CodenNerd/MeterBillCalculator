@@ -1,4 +1,13 @@
 import { supabase } from './supabase'
+import { isLocalMode } from './localMode'
+import { startLocalDemo as startDemo } from './localClient'
+
+export { isLocalMode }
+
+export async function startLocalDemo() {
+  if (!isLocalMode()) throw new Error('Local demo is only available without Supabase.')
+  return startDemo()
+}
 
 export async function signUpAdmin(email, password, complexName) {
   const { data, error } = await supabase.auth.signUp({
@@ -11,22 +20,6 @@ export async function signUpAdmin(email, password, complexName) {
 }
 
 export async function signInAdmin(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) throw new Error(error.message)
-  return data
-}
-
-export async function signUpBusinessOwner(email, password) {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { role: 'business' } },
-  })
-  if (error) throw new Error(error.message)
-  return data
-}
-
-export async function signInBusinessOwner(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw new Error(error.message)
   return data
@@ -67,40 +60,4 @@ export async function ensureComplex(user) {
 
   if (insertError) throw new Error(insertError.message)
   return created
-}
-
-/**
- * Link a business owner's new account to their pre-registered business row
- * (matched by email — the complex admin sets each business's email when
- * adding it, so this is what lets the right tenant claim the right row).
- */
-export async function claimBusinessRow(user) {
-  await supabase
-    .from('businesses')
-    .update({ owner_user_id: user.id })
-    .eq('email', user.email)
-    .is('owner_user_id', null)
-
-  const { data, error } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('owner_user_id', user.id)
-    .maybeSingle()
-
-  if (error) throw new Error(error.message)
-  return data
-}
-
-/**
- * A business owner's own bill history. No explicit filter needed —
- * row-level security only ever returns their own rows.
- */
-export async function fetchMyBillHistory() {
-  const { data, error } = await supabase
-    .from('cycle_business_bills')
-    .select('*')
-    .order('created_at', { ascending: false })
-
-  if (error) throw new Error(error.message)
-  return data
 }
