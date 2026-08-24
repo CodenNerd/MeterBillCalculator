@@ -4,7 +4,7 @@ import {
   createServiceSupabase,
   findAuthUserByEmail,
 } from '../../../../lib/supabaseAdmin'
-import { env } from '../../../../lib/env'
+import { env, getSupabaseUrl, getSupabasePublishableKey } from '../../../../lib/env'
 import { isValidPlazaSlug, slugifyPlazaName } from '../../../../utils/plaza'
 
 async function requireSuperadmin(request) {
@@ -14,8 +14,8 @@ async function requireSuperadmin(request) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
   }
 
-  const url = env('NEXT_PUBLIC_SUPABASE_URL')
-  const anon = env('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  const url = getSupabaseUrl()
+  const anon = getSupabasePublishableKey()
   const userClient = createClient(url, anon, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false },

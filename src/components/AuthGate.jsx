@@ -45,7 +45,7 @@ export default function AuthGate() {
                   <code>npm run dev</code>.
                 </p>
                 <p className="error-text" style={{ marginTop: 12 }}>
-                  Missing or placeholder NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY.
+                  Missing or placeholder NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.
                 </p>
               </>
             ) : (

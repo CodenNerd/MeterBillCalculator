@@ -1,12 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
-import { env } from './env'
+import { getSupabaseUrl, getSupabasePublishableKey } from './env'
 
 /**
  * Server-side Supabase client for metadata / OG image generation.
  */
 export function createServerSupabase() {
-  const url = env('NEXT_PUBLIC_SUPABASE_URL')
-  const key = env('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  const url = getSupabaseUrl()
+  const key = getSupabasePublishableKey()
   if (!url || !key || url.includes('your-project-id')) return null
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },

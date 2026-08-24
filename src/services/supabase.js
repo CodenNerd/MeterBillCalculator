@@ -1,22 +1,22 @@
 import { createClient } from '@supabase/supabase-js'
-import { env, isSupabaseConfigured } from '../lib/env'
+import { getSupabaseUrl, getSupabasePublishableKey, isSupabaseConfigured } from '../lib/env'
 import { isValidPlazaSlug } from '../utils/plaza'
 
-const SUPABASE_URL = env('NEXT_PUBLIC_SUPABASE_URL')
-const SUPABASE_ANON_KEY = env('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+const SUPABASE_URL = getSupabaseUrl()
+const SUPABASE_PUBLISHABLE_KEY = getSupabasePublishableKey()
 
 export const supabaseConfigured = isSupabaseConfigured()
 
 if (!supabaseConfigured) {
   console.warn(
-    'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env, then restart npm run dev.',
+    'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env, then restart npm run dev.',
   )
 }
 
 /** Placeholder client only when unset — real calls will fail until .env is filled. */
 export const supabase = createClient(
   SUPABASE_URL || 'https://placeholder.supabase.co',
-  SUPABASE_ANON_KEY || 'placeholder-anon-key',
+  SUPABASE_PUBLISHABLE_KEY || 'placeholder-publishable-key',
 )
 /**
  * Fetch all businesses for one complex, with their previous readings.

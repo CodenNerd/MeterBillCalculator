@@ -13,7 +13,7 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000) after filling `.env` with a real Supabase project, then apply the schema:
 
 ```bash
-# Add SUPABASE_DB_PASSWORD to .env (Dashboard → Settings → Database)
+# Add POSTGRES_PASSWORD to .env (or use POSTGRES_URL from Vercel)
 npm run db:migrate
 ```
 
@@ -25,13 +25,16 @@ Or paste `supabase-bootstrap.sql` into the Supabase SQL Editor and run it.
 
 ## Environment
 
+Uses [Vercel ↔ Supabase Marketplace](https://supabase.com/docs/guides/integrations/vercel-marketplace) names (legacy aliases still work locally):
+
 | Variable | Purpose |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only service role (Auth admin + plaza provisioning) |
-| `SUPERADMIN_EMAIL` | Static superadmin login email |
-| `SUPERADMIN_PASSWORD` | Static superadmin login password |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable / anon key (legacy: `NEXT_PUBLIC_SUPABASE_ANON_KEY`) |
+| `SUPABASE_SECRET_KEY` | Server-only secret key (legacy: `SUPABASE_SERVICE_ROLE_KEY`) |
+| `POSTGRES_PASSWORD` / `POSTGRES_URL` | DB access for `npm run db:migrate` |
+| `SUPERADMIN_EMAIL` | Static superadmin login email (app-specific) |
+| `SUPERADMIN_PASSWORD` | Static superadmin login password (app-specific) |
 | `NEXT_PUBLIC_SITE_URL` | Absolute origin for OG / share links (e.g. `https://your-app.vercel.app`) |
 
 ## Multitenant plazas

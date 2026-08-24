@@ -2,12 +2,12 @@
 /**
  * Apply supabase-bootstrap.sql to the linked Supabase Postgres database.
  *
- * Requires one of:
- *   DATABASE_URL=postgresql://...
- *   SUPABASE_DB_PASSWORD=<Dashboard → Settings → Database password>
+ * Prefers Vercel Marketplace connection vars when present:
+ *   POSTGRES_URL / POSTGRES_URL_NON_POOLING / DATABASE_URL
+ * or:
+ *   POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL for project ref)
  *
- * Uses NEXT_PUBLIC_SUPABASE_URL to derive the project ref when only the password is set.
- * Prefers the Supabase pooler (IPv4) because many projects' db.* hosts are IPv6-only.
+ * Legacy: SUPABASE_DB_PASSWORD
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -63,10 +63,17 @@ const POOLER_REGIONS = [
 ].filter(Boolean)
 
 function candidateUrls() {
-  if (process.env.DATABASE_URL) return [process.env.DATABASE_URL]
+  const direct = [
+    process.env.POSTGRES_URL_NON_POOLING,
+    process.env.POSTGRES_URL,
+    process.env.DATABASE_URL,
+  ].filter(Boolean)
+  if (direct.length) return direct
 
-  const password = process.env.SUPABASE_DB_PASSWORD
-  const ref = projectRefFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL || '')
+  const password = process.env.POSTGRES_PASSWORD || process.env.SUPABASE_DB_PASSWORD
+  const ref = projectRefFromUrl(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '',
+  )
   if (!password || !ref) return []
 
   const encoded = encodeURIComponent(password)
@@ -122,14 +129,10 @@ async function main() {
   if (urls.length === 0) {
     console.error(`Missing database credentials.
 
-Add ONE of these to .env:
+Add ONE of these to .env (Vercel Marketplace names preferred):
 
-  SUPABASE_DB_PASSWORD=your-database-password
-  # from Supabase Dashboard → Project Settings → Database → Database password
-
-or
-
-  DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres
+  POSTGRES_PASSWORD=your-database-password
+  # or POSTGRES_URL / POSTGRES_URL_NON_POOLING
 
 Optional: SUPABASE_REGION=eu-west-1 (speeds up pooler discovery)
 
