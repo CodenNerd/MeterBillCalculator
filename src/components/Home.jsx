@@ -93,7 +93,7 @@ export default function Home({
 
       <section className="home-hero-band">
         <div className="home-hero-copy-block">
-          <p className="home-kicker">{complexName || 'Your complex'}</p>
+          <p className="home-kicker">{complexName || 'Your plaza'}</p>
           <h1 className="home-hero-title">
             {showDraftCallout
               ? 'Continue this billing cycle'

@@ -6,10 +6,10 @@ import AppProviders from '../components/providers/AppProviders'
 export const metadata = {
   metadataBase: new URL(siteUrl()),
   title: {
-    default: 'MeterCalc',
-    template: '%s · MeterCalc',
+    default: 'PlazaBills',
+    template: '%s · PlazaBills',
   },
-  description: 'Shared-building electricity billing for complexes.',
+  description: 'Shared-building electricity billing for plazas.',
 }
 
 export default function RootLayout({ children }) {
