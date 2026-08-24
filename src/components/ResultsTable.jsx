@@ -1,3 +1,5 @@
+'use client'
+
 import { useMemo, useState } from 'react'
 import ResultRow from './ResultRow'
 import Totals from './Totals'

@@ -1,6 +1,8 @@
+'use client'
+
 import { RATE_PER_UNIT } from '../utils/billing'
 import { signOut, isLocalMode } from '../services/auth'
-import { navigate } from '../utils/hashRouter'
+import { navigate } from '../utils/navigation'
 
 function Wordmark({ className = '' }) {
   return (

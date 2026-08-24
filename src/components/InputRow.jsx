@@ -1,3 +1,5 @@
+'use client'
+
 import { useState } from 'react'
 import { isReadingValid } from '../utils/billing'
 

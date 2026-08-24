@@ -1,3 +1,5 @@
+'use client'
+
 import { formatNaira } from '../utils/billing'
 
 export default function Totals({ totalUnits, totalMisc, totalAmount, lineLoss }) {

@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import InputRow from './InputRow'
 import {
@@ -8,7 +10,7 @@ import {
   formatKwh,
   formatNaira,
 } from '../utils/billing'
-import { navigate } from '../utils/hashRouter'
+import { navigate } from '../utils/navigation'
 
 export default function CyclePage({
   businesses,

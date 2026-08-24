@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useMemo, useState } from 'react'
 import ResultsTable from './ResultsTable'
 import ConcludeDialog from './ConcludeDialog'
@@ -24,7 +26,7 @@ import {
   resultFromSavedCycle,
   shareOrCopyLink,
 } from '../utils/share'
-import { navigate } from '../utils/hashRouter'
+import { navigate } from '../utils/navigation'
 
 function cycleDateLabel(isoOrLabel) {
   if (!isoOrLabel) {

@@ -1,3 +1,5 @@
+'use client'
+
 import { formatNaira } from '../utils/billing'
 
 export default function ResultRow({ row, displayNumber, maxUnits, hasLineLoss, onClick, interactive }) {

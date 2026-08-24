@@ -1,10 +1,12 @@
+'use client'
+
 import { useEffect, useState } from 'react'
 import {
   fetchConcludedCycles,
   fetchPublishedCycles,
 } from '../services/supabase'
 import { formatNaira, hasDraftProgress } from '../utils/billing'
-import { navigate } from '../utils/hashRouter'
+import { navigate } from '../utils/navigation'
 
 function CycleRow({ cycle, onClick }) {
   return (

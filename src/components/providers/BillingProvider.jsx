@@ -1,33 +1,41 @@
-import { useMemo, useState } from 'react'
-import { useAuth } from './hooks/useAuth'
-import { useBusinesses } from './hooks/useBusinesses'
-import { useStorage } from './hooks/useStorage'
+'use client'
+
+import { createContext, useContext, useMemo, useState } from 'react'
+import { useParams, usePathname } from 'next/navigation'
+import { useAuth } from '../../hooks/useAuth'
+import { useBusinesses } from '../../hooks/useBusinesses'
+import { useStorage } from '../../hooks/useStorage'
 import {
   ALLOCATION_EQUAL,
   computeCycleResult,
   defaultCycleName,
   toDateInputValue,
-} from './utils/billing'
+} from '../../utils/billing'
 import {
   publishCycle,
   concludeCycle,
   fetchCycleById,
   fetchCycleDetail,
-} from './services/supabase'
-import { useHashRoute, navigate } from './utils/hashRouter'
-import Header from './components/Header'
-import Home from './components/Home'
-import CyclePage from './components/CyclePage'
-import BillsTablePage from './components/BillsTablePage'
-import BusinessTimeline from './components/BusinessTimeline'
-import ConfirmDialog from './components/ConfirmDialog'
-import AddBusinessDialog from './components/AddBusinessDialog'
-import AuthGate from './components/AuthGate'
-import Toast from './components/Toast'
-import './App.css'
+} from '../../services/supabase'
+import { navigate } from '../../utils/navigation'
+import Header from '../Header'
+import ConfirmDialog from '../ConfirmDialog'
+import AddBusinessDialog from '../AddBusinessDialog'
+import AuthGate from '../AuthGate'
+import Toast from '../Toast'
 
-export default function App() {
-  const route = useHashRoute()
+const BillingContext = createContext(null)
+
+export function useBilling() {
+  const ctx = useContext(BillingContext)
+  if (!ctx) throw new Error('useBilling must be used within BillingProvider')
+  return ctx
+}
+
+export function BillingProvider({ children }) {
+  const pathname = usePathname()
+  const params = useParams()
+  const cycleParam = params?.id
 
   const { session, complex, ready, authError } = useAuth()
 
@@ -182,8 +190,8 @@ export default function App() {
   function resolveExistingCycleId(overrides = {}) {
     if (overrides.cycleId != null) return overrides.cycleId
     if (activeCycleId != null) return activeCycleId
-    if (route.path === 'cycles' && route.params.id && route.params.id !== 'draft') {
-      return route.params.id
+    if (pathname?.startsWith('/cycles/') && cycleParam && cycleParam !== 'draft') {
+      return cycleParam
     }
     return null
   }
@@ -255,27 +263,82 @@ export default function App() {
     }
   }
 
-  // Legacy encoded snapshot — no auth
-  if (route.path === 'bills') {
-    return <BillsTablePage mode="public" encoded={route.params.d} />
+  const value = {
+    session,
+    complex,
+    ready,
+    authError,
+    businesses,
+    loading,
+    error,
+    reload,
+    bizList,
+    previous,
+    current,
+    misc,
+    notes,
+    actualBill,
+    allocationMethod,
+    cycleDate,
+    cycleName,
+    activeCycleId,
+    draftResult,
+    historyKey,
+    showToast,
+    handleCurrentChange,
+    handleMiscChange,
+    handleNoteChange,
+    handleRename,
+    handleRemove,
+    handleClear,
+    setActualBill,
+    setAllocationMethod,
+    setCycleDate,
+    setCycleName,
+    setShowAddBusiness,
+    handlePublish,
+    handleConclude,
+    hydrateFromCycle,
+    handleContinuePublished,
+    fetchCycleById,
+    toDateInputValue,
   }
 
-  // Public stable cycle link — no auth required
-  if (
-    route.path === 'cycles'
-    && route.params.id
-    && route.params.id !== 'draft'
-    && ready
-    && !session
-  ) {
-    return (
-      <BillsTablePage
-        mode="public-cycle"
-        cycleId={route.params.id}
-        isAdmin={false}
-      />
-    )
-  }
+  return (
+    <BillingContext.Provider value={value}>
+      {children}
+      {confirm && (
+        <ConfirmDialog
+          message={confirm.message}
+          detail={confirm.detail}
+          confirmLabel={confirm.confirmLabel}
+          danger={confirm.danger}
+          onConfirm={confirm.onConfirm}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {showAddBusiness && (
+        <AddBusinessDialog
+          onAdd={handleAddBusiness}
+          onCancel={() => setShowAddBusiness(false)}
+        />
+      )}
+      <Toast message={toast} />
+    </BillingContext.Provider>
+  )
+}
+
+/** Gates private admin pages; public cycle routes skip this. */
+export function AdminGate({ children, showHome }) {
+  const {
+    session,
+    complex,
+    ready,
+    authError,
+    loading,
+    error,
+    reload,
+  } = useBilling()
 
   if (!ready) {
     return (
@@ -328,126 +391,14 @@ export default function App() {
     )
   }
 
-  const onWorksheet = route.path === 'cycle'
-  const onCycleTable = route.path === 'cycles'
-  const onBusiness = route.path === 'businesses'
-
   return (
     <div className="app">
       <Header
         complexName={complex?.name}
         showSignOut
-        showHome={onWorksheet || onCycleTable || onBusiness}
+        showHome={showHome}
       />
-
-      {route.path === 'cycle' ? (
-        <CyclePage
-          businesses={bizList}
-          previous={previous}
-          current={current}
-          misc={misc}
-          notes={notes}
-          actualBill={actualBill}
-          allocationMethod={allocationMethod || ALLOCATION_EQUAL}
-          cycleDate={cycleDate}
-          cycleName={cycleName}
-          activeCycleId={activeCycleId}
-          onCurrentChange={handleCurrentChange}
-          onMiscChange={handleMiscChange}
-          onNoteChange={handleNoteChange}
-          onActualBillChange={setActualBill}
-          onAllocationMethodChange={setAllocationMethod}
-          onCycleDateChange={setCycleDate}
-          onCycleNameChange={setCycleName}
-          onRename={handleRename}
-          onRemove={handleRemove}
-          onAddBusiness={() => setShowAddBusiness(true)}
-          onClear={handleClear}
-        />
-      ) : route.path === 'cycles' && route.params.id === 'draft' ? (
-        <BillsTablePage
-          mode="draft"
-          complexId={complex?.id}
-          complexName={complex?.name}
-          draftResult={draftResult}
-          draftCycleDate={cycleDate}
-          draftCycleName={cycleName}
-          activeCycleId={activeCycleId}
-          isAdmin
-          onBack={() => navigate('/cycle')}
-          onPublish={handlePublish}
-        />
-      ) : route.path === 'cycles' && route.params.id ? (
-        <BillsTablePage
-          mode="saved"
-          cycleId={route.params.id}
-          complexId={complex?.id}
-          complexName={complex?.name}
-          isAdmin
-          onBack={() => navigate('/')}
-          onPublish={async (result) => {
-            const cycle = await fetchCycleById(route.params.id, complex.id)
-            return handlePublish(result, {
-              cycleId: route.params.id,
-              name: cycle?.name || cycleName,
-              cycleDate: cycle ? toDateInputValue(cycle.cycle_date) : cycleDate,
-            })
-          }}
-          onConclude={async (result, evidenceMap) => {
-            const cycle = await fetchCycleById(route.params.id, complex.id)
-            return handleConclude(result, evidenceMap, {
-              cycleId: route.params.id,
-              name: cycle?.name || cycleName,
-              cycleDate: cycle ? toDateInputValue(cycle.cycle_date) : cycleDate,
-            })
-          }}
-          onEditWorksheet={async () => {
-            try {
-              await hydrateFromCycle(route.params.id)
-              navigate('/cycle')
-            } catch {
-              showToast('Could not open worksheet')
-            }
-          }}
-        />
-      ) : route.path === 'businesses' && route.params.id ? (
-        <BusinessTimeline
-          businessId={route.params.id}
-          complexId={complex?.id}
-        />
-      ) : (
-        <Home
-          complexId={complex?.id}
-          complexName={complex?.name}
-          current={current}
-          misc={misc}
-          notes={notes}
-          actualBill={actualBill}
-          activeCycleId={activeCycleId}
-          onRefreshKey={historyKey}
-          onContinuePublished={handleContinuePublished}
-        />
-      )}
-
-      {confirm && (
-        <ConfirmDialog
-          message={confirm.message}
-          detail={confirm.detail}
-          confirmLabel={confirm.confirmLabel}
-          danger={confirm.danger}
-          onConfirm={confirm.onConfirm}
-          onCancel={() => setConfirm(null)}
-        />
-      )}
-
-      {showAddBusiness && (
-        <AddBusinessDialog
-          onAdd={handleAddBusiness}
-          onCancel={() => setShowAddBusiness(false)}
-        />
-      )}
-
-      <Toast message={toast} />
+      {children}
     </div>
   )
 }

@@ -1,3 +1,5 @@
+import { siteUrl } from '../lib/env'
+
 // Unicode-safe base64 encode/decode so the ₦ symbol and business names
 // with accents survive the round trip through a URL.
 export function encodePayload(obj) {
@@ -88,16 +90,22 @@ export function resultFromSavedCycle(cycle, detailRows) {
   }
 }
 
-export function buildShareUrl(payload, route = 'bills') {
-  const encoded = encodePayload(payload)
-  const base = `${window.location.origin}${window.location.pathname}`
-  return `${base}#/${route}?d=${encoded}`
+function originBase() {
+  if (typeof window !== 'undefined') {
+    return window.location.origin
+  }
+  return siteUrl()
 }
 
-/** Stable share link for a published/concluded cycle. */
+/** Legacy encoded snapshot share (fallback). */
+export function buildShareUrl(payload, route = 'bills') {
+  const encoded = encodePayload(payload)
+  return `${originBase()}/${route}?d=${encoded}`
+}
+
+/** Stable share link for a published/concluded cycle (path-based for OG). */
 export function buildCycleShareUrl(cycleId) {
-  const base = `${window.location.origin}${window.location.pathname}`
-  return `${base}#/cycles/${cycleId}`
+  return `${originBase()}/cycles/${cycleId}`
 }
 
 /**
@@ -122,7 +130,6 @@ export async function shareOrCopyLink(url, title) {
       return 'shared'
     } catch (err) {
       if (err.name === 'AbortError') return 'cancelled'
-      // fall through to clipboard for any other error
     }
   }
   try {

@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import { isLocalMode } from './localMode'
 import { createLocalClient } from './localClient'
+import { env } from '../lib/env'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SUPABASE_URL = env('NEXT_PUBLIC_SUPABASE_URL')
+const SUPABASE_ANON_KEY = env('NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
 export const supabase = isLocalMode()
   ? createLocalClient()

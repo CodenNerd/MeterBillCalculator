@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../services/supabase'
 import { ensureComplex, onAuthStateChange } from '../services/auth'

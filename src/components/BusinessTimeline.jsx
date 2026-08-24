@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect, useState } from 'react'
 import {
   fetchBusinessBillTimeline,
@@ -5,7 +7,7 @@ import {
 } from '../services/supabase'
 import { getEvidenceObjectUrl } from '../services/evidenceStore'
 import { formatKwh, formatNaira } from '../utils/billing'
-import { navigate } from '../utils/hashRouter'
+import { navigate } from '../utils/navigation'
 
 export default function BusinessTimeline({ businessId, complexId }) {
   const [business, setBusiness] = useState(null)

@@ -17,6 +17,7 @@ function emptyDb() {
 }
 
 function load() {
+  if (typeof window === 'undefined') return emptyDb()
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     return raw ? { ...emptyDb(), ...JSON.parse(raw) } : emptyDb()
@@ -26,6 +27,7 @@ function load() {
 }
 
 function save(db) {
+  if (typeof window === 'undefined') return
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db))
 }
 
