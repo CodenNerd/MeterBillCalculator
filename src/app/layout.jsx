@@ -10,7 +10,6 @@ export const metadata = {
     template: '%s · PlazaBills',
   },
   description: 'Shared-building electricity billing for plazas.',
-  applicationName: 'PlazaBills',
 }
 
 export default function RootLayout({ children }) {
