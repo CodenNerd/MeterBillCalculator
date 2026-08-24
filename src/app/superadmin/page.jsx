@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Header from '../../components/Header'
 import { useBilling } from '../../components/providers/BillingProvider'
 import { createPlaza, listPlazas } from '../../services/supabase'
 import { navigate } from '../../utils/navigation'
 import { slugifyPlazaName, isValidPlazaSlug, plazaPath } from '../../utils/plaza'
-import { signOut, startLocalSuperadmin, isLocalMode } from '../../services/auth'
+import { signOut } from '../../services/auth'
 import AuthGate from '../../components/AuthGate'
 
 export default function SuperadminPage() {
@@ -16,6 +15,7 @@ export default function SuperadminPage() {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [ownerEmail, setOwnerEmail] = useState('')
+  const [ownerPassword, setOwnerPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [slugTouched, setSlugTouched] = useState(false)
 
@@ -31,7 +31,6 @@ export default function SuperadminPage() {
   if (!ready) {
     return (
       <div className="app">
-        <Header />
         <div className="status-screen">
           <div className="spinner" />
           <p>Loading...</p>
@@ -47,7 +46,6 @@ export default function SuperadminPage() {
   if (role !== 'superadmin') {
     return (
       <div className="app">
-        <Header showSignOut />
         <div className="status-screen">
           <p className="error-text">Superadmin access required.</p>
           <button type="button" className="btn btn-primary" onClick={() => navigate('/')}>
@@ -63,11 +61,17 @@ export default function SuperadminPage() {
     setBusy(true)
     setError(null)
     try {
-      const created = await createPlaza({ name, slug, ownerEmail })
+      const created = await createPlaza({
+        name,
+        slug,
+        ownerEmail,
+        ownerPassword,
+      })
       setPlazas(prev => [created, ...(prev || [])])
       setName('')
       setSlug('')
       setOwnerEmail('')
+      setOwnerPassword('')
       setSlugTouched(false)
     } catch (err) {
       setError(err.message)
@@ -85,18 +89,6 @@ export default function SuperadminPage() {
             <span className="complex-label">Superadmin</span>
           </div>
           <div className="header-meta">
-            {isLocalMode() && (
-              <button
-                type="button"
-                className="btn-text"
-                onClick={async () => {
-                  await startLocalSuperadmin()
-                  window.location.reload()
-                }}
-              >
-                Refresh super session
-              </button>
-            )}
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => signOut()}>
               Sign out
             </button>
@@ -109,7 +101,7 @@ export default function SuperadminPage() {
           <h1 className="page-title">Plazas</h1>
           <p className="page-lede">
             Create plazas (buildings / shared tenancies). Each gets a URL like{' '}
-            <code>/kmsplaza/</code>.
+            <code>/kmsplaza/</code>. You set the plaza admin email and password here.
           </p>
         </header>
 
@@ -147,7 +139,7 @@ export default function SuperadminPage() {
               <p className="alloc-hint">
                 {isValidPlazaSlug(slug)
                   ? `Share base: /${slug}/cycles/…`
-                  : 'Use lowercase letters, numbers, hyphens.'}
+                  : 'Use lowercase letters, numbers, and hyphens.'}
               </p>
             </div>
             <div className="input-wrap">
@@ -158,14 +150,34 @@ export default function SuperadminPage() {
                 className="reading-input"
                 value={ownerEmail}
                 onChange={e => setOwnerEmail(e.target.value)}
+                required
                 placeholder="admin@kmsplaza.com"
               />
+            </div>
+            <div className="input-wrap">
+              <label htmlFor="owner-password">Plaza admin password</label>
+              <input
+                id="owner-password"
+                type="password"
+                className="reading-input"
+                value={ownerPassword}
+                onChange={e => setOwnerPassword(e.target.value)}
+                required
+                minLength={6}
+                autoComplete="new-password"
+                placeholder="At least 6 characters"
+              />
               <p className="alloc-hint">
-                When they sign up with this email, the plaza is claimed.
+                Give these credentials to the plaza admin. They sign in on the home page —
+                no self-signup.
               </p>
             </div>
             {error && <p className="error-text">{error}</p>}
-            <button type="submit" className="btn btn-primary" disabled={busy || !isValidPlazaSlug(slug)}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={busy || !isValidPlazaSlug(slug) || !ownerEmail || !ownerPassword}
+            >
               {busy ? 'Creating...' : 'Create plaza'}
             </button>
           </form>
@@ -201,8 +213,8 @@ export default function SuperadminPage() {
                     <strong>{p.name}</strong>
                     <div className="muted" style={{ fontSize: '0.85rem' }}>
                       /{p.slug}
-                      {p.owner_email ? ` · invite ${p.owner_email}` : ''}
-                      {p.owner_id ? ' · claimed' : ' · unclaimed'}
+                      {p.owner_email ? ` · admin ${p.owner_email}` : ''}
+                      {p.owner_id ? ' · provisioned' : ' · pending'}
                     </div>
                   </div>
                   <button

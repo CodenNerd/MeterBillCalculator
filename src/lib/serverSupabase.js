@@ -1,16 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
-import { isLocalMode } from '../services/localMode'
 import { env } from './env'
 
 /**
  * Server-side Supabase client for metadata / OG image generation.
- * Returns null in local stub mode (no real DB for crawlers).
  */
 export function createServerSupabase() {
-  if (isLocalMode()) return null
   const url = env('NEXT_PUBLIC_SUPABASE_URL')
   const key = env('NEXT_PUBLIC_SUPABASE_ANON_KEY')
-  if (!url || !key) return null
+  if (!url || !key || url.includes('your-project-id')) return null
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   })

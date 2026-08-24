@@ -7,9 +7,11 @@ import { BillingProvider } from './BillingProvider'
 
 function NavigationBinder({ children }) {
   const router = useRouter()
-  useEffect(() => {
-    bindNavigate((path) => router.push(path))
-  }, [router])
+  // Bind during render so navigate() never falls back to a full page load
+  // before useEffect runs.
+  bindNavigate((path) => {
+    router.push(path)
+  })
   return children
 }
 
@@ -19,7 +21,7 @@ function HashRedirect() {
   useEffect(() => {
     const hash = window.location.hash || ''
     if (!hash.startsWith('#/')) return
-    const clean = hash.slice(1) // /cycles/1 or /bills?d=...
+    const clean = hash.slice(1)
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
     router.replace(clean)
   }, [router])

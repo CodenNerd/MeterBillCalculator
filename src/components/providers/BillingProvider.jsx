@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useParams, usePathname } from 'next/navigation'
 import { useAuth } from '../../hooks/useAuth'
 import { useBusinesses } from '../../hooks/useBusinesses'
@@ -39,7 +39,7 @@ export function BillingProvider({ children }) {
   const cycleParam = params?.id
   const plazaSlugParam = params?.plazaSlug || null
 
-  const { session, role, complex, ready, authError, setComplex } = useAuth()
+  const { session, role, complex, ready, authError, setComplex } = useAuth(plazaSlugParam)
 
   const plazaSlug = plazaSlugParam || complex?.slug || null
 
@@ -61,12 +61,29 @@ export function BillingProvider({ children }) {
   const [allocationMethod, setAllocationMethod] = useStorage('mc_alloc_method', ALLOCATION_EQUAL)
   const [cycleDate, setCycleDate] = useStorage('mc_cycle_date', toDateInputValue())
   const [cycleName, setCycleName] = useStorage('mc_cycle_name', defaultCycleName())
-  const [activeCycleId, setActiveCycleId] = useStorage('mc_active_cycle_id', null)
+  const [activeCycleId, setActiveCycleId, clearActiveCycleId] = useStorage('mc_active_cycle_id', null)
 
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(null)
   const [showAddBusiness, setShowAddBusiness] = useState(false)
   const [historyKey, setHistoryKey] = useState(0)
+
+  // Drop stale cycle ids left over from the old local demo / failed publishes.
+  useEffect(() => {
+    if (!activeCycleId || !complex?.id || !ready) return undefined
+    let cancelled = false
+    fetchCycleById(activeCycleId, complex.id)
+      .then((cycle) => {
+        if (cancelled) return
+        if (!cycle) clearActiveCycleId()
+      })
+      .catch(() => {
+        if (!cancelled) clearActiveCycleId()
+      })
+    return () => { cancelled = true }
+    // clearActiveCycleId is stable enough for this one-shot validation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCycleId, complex?.id, ready])
 
   const bizList = businesses.map(b => ({ id: b.id, name: b.name }))
   const previous = Object.fromEntries(businesses.map(b => [b.id, b.previous_reading]))
