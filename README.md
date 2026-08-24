@@ -10,14 +10,16 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) after filling `.env` with a real Supabase project, then apply the schema:
+Open [http://localhost:3000](http://localhost:3000) after filling `.env` with a real Supabase project.
+
+Schema migrations run automatically when the Node server starts (`src/instrumentation.js`), using `POSTGRES_URL*` or `POSTGRES_PASSWORD`. They are tracked in `public.schema_migrations` and are idempotent. To run manually (or re-apply):
 
 ```bash
-# Add POSTGRES_PASSWORD to .env (or use POSTGRES_URL from Vercel)
 npm run db:migrate
+npm run db:migrate -- --force
 ```
 
-Or paste `supabase-bootstrap.sql` into the Supabase SQL Editor and run it.
+Set `SKIP_DB_MIGRATE=1` to disable auto-migrate. You can still paste `supabase-bootstrap.sql` into the Supabase SQL Editor if you prefer.
 
 1. Sign in at `/superadmin` with `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD`
 2. Create a plaza and set the plaza admin email + password
@@ -32,7 +34,8 @@ Uses [Vercel ↔ Supabase Marketplace](https://supabase.com/docs/guides/integrat
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Publishable / anon key (legacy: `NEXT_PUBLIC_SUPABASE_ANON_KEY`) |
 | `SUPABASE_SECRET_KEY` | Server-only secret key (legacy: `SUPABASE_SERVICE_ROLE_KEY`) |
-| `POSTGRES_PASSWORD` / `POSTGRES_URL` | DB access for `npm run db:migrate` |
+| `POSTGRES_PASSWORD` / `POSTGRES_URL` | DB access for auto-migrate on boot + `npm run db:migrate` |
+| `SKIP_DB_MIGRATE` | Set to `1` to skip startup / CLI migrate |
 | `SUPERADMIN_EMAIL` | Static superadmin login email (app-specific) |
 | `SUPERADMIN_PASSWORD` | Static superadmin login password (app-specific) |
 | `NEXT_PUBLIC_SITE_URL` | Absolute origin for OG / share links (e.g. `https://your-app.vercel.app`) |
@@ -75,10 +78,11 @@ Legacy hash links (`#/cycles/...`) are redirected to the path form on load.
 - Per-tenant payment status: `awaiting` | `paid` | `unpaid` — conclude is blocked until none are awaiting
 - Tenant timeline: `/{slug}/businesses/{id}` with invoice at `/{slug}/businesses/{id}/invoices/{cycleId}`
 - Admin settings: `/{slug}/settings` (rate ₦/kWh, bank account, home banner)
-- Apply SQL: `supabase-migration-payments-settings.sql` and `supabase-migration-plazas.sql` on real Supabase projects
+- Apply SQL: bootstrap is applied automatically on boot (`supabase-bootstrap.sql`); optional incremental files remain in the repo for reference
 
 ## Scripts
 
-- `npm run dev` — development server (port 3000)
+- `npm run dev` — development server (port 3000); auto-migrates schema on boot
 - `npm run build` — production build
-- `npm start` — serve production build
+- `npm start` — serve production build; auto-migrates schema on boot
+- `npm run db:migrate` — apply schema now (`--force` to re-run bootstrap)

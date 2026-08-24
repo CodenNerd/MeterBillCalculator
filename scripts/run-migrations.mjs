@@ -1,189 +1,56 @@
-#!/usr/bin/env node
 /**
- * Apply supabase-bootstrap.sql to the linked Supabase Postgres database.
+ * Apply MeterCalc schema to Supabase Postgres.
+ * Prefer: POSTGRES_URL / POSTGRES_URL_NON_POOLING from Vercel ↔ Supabase.
+ * Or: POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL) to try pooler hosts.
  *
- * Prefers Vercel Marketplace connection vars when present:
- *   POSTGRES_URL / POSTGRES_URL_NON_POOLING / DATABASE_URL
- * or:
- *   POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL for project ref)
- *
- * Legacy: SUPABASE_DB_PASSWORD
+ * Also runs automatically on Node server start (see src/instrumentation.js).
+ * Skip with SKIP_DB_MIGRATE=1.
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { createRequire } from 'node:module'
-import dns from 'node:dns'
+import { ensureDatabaseMigrated } from '../src/lib/dbMigrate.mjs'
 
-const require = createRequire(import.meta.url)
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const root = path.resolve(__dirname, '..')
-
+/** Minimal .env loader (no dotenv dependency). */
 function loadEnvFile(filePath) {
-  if (!fs.existsSync(filePath)) return
-  const text = fs.readFileSync(filePath, 'utf8')
-  for (const line of text.split(/\r?\n/)) {
+  const full = path.resolve(filePath)
+  if (!fs.existsSync(full)) return
+  for (const line of fs.readFileSync(full, 'utf8').split('\n')) {
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
     const eq = trimmed.indexOf('=')
-    if (eq < 0) continue
+    if (eq <= 0) continue
     const key = trimmed.slice(0, eq).trim()
     let value = trimmed.slice(eq + 1).trim()
     if (
-      (value.startsWith('"') && value.endsWith('"'))
-      || (value.startsWith("'") && value.endsWith("'"))
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1)
     }
-    if (process.env[key] == null) process.env[key] = value
+    if (process.env[key] === undefined) process.env[key] = value
   }
 }
 
-loadEnvFile(path.join(root, '.env.local'))
-loadEnvFile(path.join(root, '.env'))
+loadEnvFile('.env.local')
+loadEnvFile('.env')
 
-function projectRefFromUrl(url) {
-  try {
-    const host = new URL(url).hostname
-    const match = host.match(/^([a-z0-9-]+)\.supabase\.co$/i)
-    return match ? match[1] : null
-  } catch {
-    return null
-  }
-}
+const force = process.argv.includes('--force')
 
-const POOLER_REGIONS = [
-  process.env.SUPABASE_REGION,
-  'eu-west-1',
-  'eu-central-1',
-  'eu-west-2',
-  'us-east-1',
-  'us-west-1',
-  'ap-southeast-1',
-].filter(Boolean)
-
-function candidateUrls() {
-  const direct = [
-    process.env.POSTGRES_URL_NON_POOLING,
-    process.env.POSTGRES_URL,
-    process.env.DATABASE_URL,
-  ].filter(Boolean)
-  if (direct.length) return direct
-
-  const password = process.env.POSTGRES_PASSWORD || process.env.SUPABASE_DB_PASSWORD
-  const ref = projectRefFromUrl(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '',
-  )
-  if (!password || !ref) return []
-
-  const encoded = encodeURIComponent(password)
-  const urls = []
-
-  for (const region of POOLER_REGIONS) {
-    for (const prefix of ['aws-1', 'aws-0']) {
-      // Session mode (5432) preferred for DDL; transaction (6543) as fallback
-      urls.push(
-        `postgresql://postgres.${ref}:${encoded}@${prefix}-${region}.pooler.supabase.com:5432/postgres`,
-      )
-      urls.push(
-        `postgresql://postgres.${ref}:${encoded}@${prefix}-${region}.pooler.supabase.com:6543/postgres`,
-      )
-    }
-  }
-
-  // Direct host (often IPv6-only)
-  urls.push(`postgresql://postgres:${encoded}@db.${ref}.supabase.co:5432/postgres`)
-
-  return urls
-}
-
-async function tryConnect(pg, connectionString) {
-  const client = new pg.Client({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 12000,
-  })
-  await client.connect()
-  return client
-}
-
-async function main() {
-  let pg
-  try {
-    pg = require('pg')
-  } catch {
-    console.error('Installing pg…')
-    const { execSync } = await import('node:child_process')
-    execSync('npm install pg --no-save', { cwd: root, stdio: 'inherit' })
-    pg = require('pg')
-  }
-
-  // Prefer IPv4 for pooler; allow IPv6 fallback for direct db.* hosts
-  try {
-    dns.setDefaultResultOrder('ipv4first')
-  } catch {
-    /* older Node */
-  }
-
-  const urls = candidateUrls()
-  if (urls.length === 0) {
-    console.error(`Missing database credentials.
-
-Add ONE of these to .env (Vercel Marketplace names preferred):
-
-  POSTGRES_PASSWORD=your-database-password
-  # or POSTGRES_URL / POSTGRES_URL_NON_POOLING
-
-Optional: SUPABASE_REGION=eu-west-1 (speeds up pooler discovery)
-
-Then re-run: npm run db:migrate
-`)
-    process.exit(1)
-  }
-
-  const sqlPath = path.join(root, 'supabase-bootstrap.sql')
-  const sql = fs.readFileSync(sqlPath, 'utf8')
-
-  let client = null
-  let lastError = null
-  for (const url of urls) {
-    const host = url.replace(/:[^:@/]+@/, ':****@').match(/@([^/]+)/)?.[1] || 'unknown'
-    process.stdout.write(`Trying ${host}… `)
-    try {
-      client = await tryConnect(pg, url)
-      console.log('connected')
-      break
-    } catch (err) {
-      console.log('failed')
-      lastError = err
-    }
-  }
-
-  if (!client) {
-    console.error('Migration failed:', lastError?.message || 'could not connect')
+try {
+  const result = await ensureDatabaseMigrated({ force })
+  if (result.status === 'skipped') {
     console.error(
-      'Tip: copy the Session pooler URI from Dashboard → Connect → ORMs, set DATABASE_URL, retry.',
+      result.reason === 'no-credentials'
+        ? 'No Postgres URL/password. Set POSTGRES_URL or POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL).'
+        : `Skipped: ${result.reason}`,
     )
-    process.exit(1)
+    if (result.reason === 'no-credentials') process.exit(1)
+  } else if (result.status === 'already-applied') {
+    console.log(`Already applied: ${result.id} (pass --force to re-run)`)
+  } else if (result.status === 'applied') {
+    console.log(`Applied: ${result.id}`)
   }
-
-  try {
-    console.log('Applying supabase-bootstrap.sql…')
-    await client.query(sql)
-    const { rows } = await client.query(`
-      select table_name
-      from information_schema.tables
-      where table_schema = 'public'
-        and table_name in ('complexes', 'businesses', 'billing_cycles', 'cycle_business_bills')
-      order by table_name
-    `)
-    console.log('OK. Tables present:', rows.map(r => r.table_name).join(', '))
-  } finally {
-    await client.end()
-  }
-}
-
-main().catch((err) => {
-  console.error('Migration failed:', err.message)
+} catch (err) {
+  console.error('Migration failed:', err.message || err)
   process.exit(1)
-})
+}
