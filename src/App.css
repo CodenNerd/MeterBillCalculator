@@ -930,6 +930,15 @@ button.table-row--clickable {
 
 .timeline-card-head p { margin: 4px 0 0; font-size: 0.85rem; }
 
+.timeline-tenant-snap {
+  margin-top: 6px !important;
+}
+
+.timeline-tenant-snap strong {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
 .timeline-card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1831,6 +1840,20 @@ button.table-row--clickable {
 
 .biz-block-stats .gstat-value.pulse {
   animation: amount-pulse 0.55s ease;
+}
+
+.biz-block-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.biz-action-btn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 8px;
+  white-space: nowrap;
 }
 
 .remove-btn {

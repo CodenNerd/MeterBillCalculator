@@ -1,4 +1,4 @@
-import { formatNaira } from '../../../../../../utils/billing'
+import { formatNaira, tenantNameForBill } from '../../../../../../utils/billing'
 import { siteUrl } from '../../../../../../lib/env'
 import { fetchPublicInvoiceServer } from '../../../../../../lib/serverSupabase'
 import InvoicePageClient from './InvoicePageClient'
@@ -13,7 +13,7 @@ export async function generateMetadata({ params }) {
   }
 
   const { business, bill, cycle, plaza } = data
-  const name = business.name || bill.business_name || 'Invoice'
+  const name = tenantNameForBill(bill, business)
   const due = formatNaira(Number(bill.final_amount) || 0)
   const date = cycle.cycle_date
     ? new Date(cycle.cycle_date).toLocaleDateString('en-NG', {

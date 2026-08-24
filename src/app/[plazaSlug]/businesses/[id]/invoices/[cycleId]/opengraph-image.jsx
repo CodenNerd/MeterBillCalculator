@@ -1,6 +1,6 @@
 import { ImageResponse } from 'next/og'
 import { fetchPublicInvoiceServer } from '../../../../../../lib/serverSupabase'
-import { RATE_PER_UNIT } from '../../../../../../utils/billing'
+import { RATE_PER_UNIT, tenantNameForBill } from '../../../../../../utils/billing'
 
 export const runtime = 'nodejs'
 export const size = { width: 1200, height: 630 }
@@ -62,7 +62,7 @@ export default async function Image({ params }) {
   }
 
   const { business, bill, cycle, plaza } = data
-  const tenant = business.name || bill.business_name || 'Tenant'
+  const tenant = tenantNameForBill(bill, business)
   const status = bill.payment_status || 'awaiting'
   const badge = statusColors(status)
   const energy = Number(bill.unit_amount) || 0

@@ -14,6 +14,7 @@ export default function InputRow({
   onMiscChange,
   onNoteChange,
   onRename,
+  onReplaceTenant,
   onRemove,
   live,
   readOnly = false,
@@ -61,15 +62,24 @@ export default function InputRow({
               )}
             </div>
             {!readOnly && (
-              <button
-                className="remove-btn"
-                onClick={() => onRemove(biz.id)}
-                title="Remove business"
-                aria-label="Remove business"
-                type="button"
-              >
-                Remove
-              </button>
+              <div className="biz-block-actions">
+                <button
+                  className="btn-text biz-action-btn"
+                  onClick={() => onReplaceTenant?.(biz)}
+                  type="button"
+                >
+                  Replace tenant
+                </button>
+                <button
+                  className="remove-btn"
+                  onClick={() => onRemove(biz.id)}
+                  title="Remove business"
+                  aria-label="Remove business"
+                  type="button"
+                >
+                  Remove
+                </button>
+              </div>
             )}
           </header>
 

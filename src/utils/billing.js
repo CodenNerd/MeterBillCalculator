@@ -143,6 +143,18 @@ export function formatKwh(n) {
   return `${Number(n).toFixed(2)} kWh`
 }
 
+/**
+ * Name to show for a specific bill/cycle. Prefer the frozen snapshot so
+ * replace-tenant handoffs never rewrite historical invoices.
+ */
+export function tenantNameForBill(bill, business) {
+  const snap = bill?.business_name && String(bill.business_name).trim()
+  if (snap) return snap
+  const live = business?.name && String(business.name).trim()
+  if (live) return live
+  return 'Tenant'
+}
+
 export function paymentStatusLabel(status, cycleStatus) {
   if (status === PAYMENT_PAID) {
     return cycleStatus === 'published' ? 'Paid (cycle still open)' : 'Paid'

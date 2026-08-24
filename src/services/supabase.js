@@ -50,17 +50,29 @@ export async function addBusiness(biz, complexId) {
 }
 
 /**
- * Rename a business.
+ * Rename a business (typo fix). Does not touch previous_reading or past bill snapshots.
  * @param {number} id
  * @param {string} newName
  */
 export async function renameBusiness(id, newName) {
+  const trimmed = String(newName || '').trim()
+  if (!trimmed) throw new Error('Business name is required')
   const { error } = await supabase
     .from('businesses')
-    .update({ name: newName })
+    .update({ name: trimmed })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+}
+
+/**
+ * Replace the tenant occupying this shop: same business row and meter reading,
+ * new live name. Past cycle_business_bills.business_name rows are left unchanged.
+ * @param {number} id
+ * @param {string} newName
+ */
+export async function replaceTenant(id, newName) {
+  return renameBusiness(id, newName)
 }
 
 /**

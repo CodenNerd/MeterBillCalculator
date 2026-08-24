@@ -5,6 +5,7 @@ import {
   fetchBusinesses,
   addBusiness,
   renameBusiness,
+  replaceTenant,
   removeBusiness,
   saveCycleReadings,
   updatePreviousReading,
@@ -74,10 +75,23 @@ export function useBusinesses(complexId) {
     try {
       await renameBusiness(id, newName)
       setBusinesses(prev =>
-        prev.map(b => b.id === id ? { ...b, name: newName } : b)
+        prev.map(b => b.id === id ? { ...b, name: newName.trim() } : b)
       )
     } catch {
       setError('Failed to rename business.')
+    }
+  }
+
+  async function replace(id, newName) {
+    try {
+      const trimmed = String(newName || '').trim()
+      await replaceTenant(id, trimmed)
+      setBusinesses(prev =>
+        prev.map(b => (b.id === id ? { ...b, name: trimmed } : b))
+      )
+    } catch (err) {
+      setError('Failed to replace tenant.')
+      throw err
     }
   }
 
@@ -131,5 +145,5 @@ export function useBusinesses(complexId) {
     }
   }
 
-  return { businesses, loading, error, add, rename, remove, setPrevious, saveCycle, reload: load }
+  return { businesses, loading, error, add, rename, replace, remove, setPrevious, saveCycle, reload: load }
 }

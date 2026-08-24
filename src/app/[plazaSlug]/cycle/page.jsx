@@ -30,6 +30,10 @@ export default function CycleWorksheetPage() {
         onCycleDateChange={b.setCycleDate}
         onCycleNameChange={b.setCycleName}
         onRename={b.handleRename}
+        onReplaceTenant={(biz) => {
+          const full = (b.businesses || []).find(row => String(row.id) === String(biz.id))
+          b.setReplaceTarget(full || biz)
+        }}
         onRemove={b.handleRemove}
         onAddBusiness={() => b.setShowAddBusiness(true)}
         onClear={b.handleClear}

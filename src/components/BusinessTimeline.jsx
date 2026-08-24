@@ -156,6 +156,13 @@ export default function BusinessTimeline({
                             {' · '}
                             {cycle.status === 'published' ? 'Published' : 'Concluded'}
                           </p>
+                          {bill.business_name
+                            && business.name
+                            && bill.business_name.trim() !== business.name.trim() && (
+                            <p className="muted timeline-tenant-snap">
+                              Billed as <strong>{bill.business_name}</strong>
+                            </p>
+                          )}
                         </div>
                         <span className="mono amount">{formatNaira(bill.final_amount)}</span>
                       </div>

@@ -22,6 +22,7 @@ import { plazaPath } from '../../utils/plaza'
 import Header from '../Header'
 import ConfirmDialog from '../ConfirmDialog'
 import AddBusinessDialog from '../AddBusinessDialog'
+import ReplaceTenantDialog from '../ReplaceTenantDialog'
 import AuthGate from '../AuthGate'
 import Toast from '../Toast'
 
@@ -47,7 +48,7 @@ export function BillingProvider({ children }) {
     return plazaPath(plazaSlug, path)
   }
 
-  const { businesses, loading, error, add, rename, remove, reload } =
+  const { businesses, loading, error, add, rename, replace, remove, reload } =
     useBusinesses(complex?.id)
 
   const ratePerUnit = Number(complex?.rate_per_unit) > 0
@@ -66,6 +67,7 @@ export function BillingProvider({ children }) {
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(null)
   const [showAddBusiness, setShowAddBusiness] = useState(false)
+  const [replaceTarget, setReplaceTarget] = useState(null)
   const [historyKey, setHistoryKey] = useState(0)
 
   // Drop stale cycle ids left over from the old local demo / failed publishes.
@@ -121,6 +123,13 @@ export function BillingProvider({ children }) {
 
   async function handleRename(id, newName) {
     await rename(id, newName)
+  }
+
+  async function handleReplaceTenant(newName) {
+    if (!replaceTarget) return
+    await replace(replaceTarget.id, newName)
+    setReplaceTarget(null)
+    showToast('Tenant replaced — meter reading unchanged')
   }
 
   function handleRemove(id) {
@@ -324,6 +333,7 @@ export function BillingProvider({ children }) {
     handleMiscChange,
     handleNoteChange,
     handleRename,
+    setReplaceTarget,
     handleRemove,
     handleClear,
     setActualBill,
@@ -356,6 +366,13 @@ export function BillingProvider({ children }) {
         <AddBusinessDialog
           onAdd={handleAddBusiness}
           onCancel={() => setShowAddBusiness(false)}
+        />
+      )}
+      {replaceTarget && (
+        <ReplaceTenantDialog
+          business={replaceTarget}
+          onReplace={handleReplaceTenant}
+          onCancel={() => setReplaceTarget(null)}
         />
       )}
       <Toast message={toast} />

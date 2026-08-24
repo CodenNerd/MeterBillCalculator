@@ -33,6 +33,7 @@ export default function CyclePage({
   onCycleDateChange,
   onCycleNameChange,
   onRename,
+  onReplaceTenant,
   onRemove,
   onAddBusiness,
   onClear,
@@ -230,6 +231,7 @@ export default function CyclePage({
                 onMiscChange={onMiscChange}
                 onNoteChange={onNoteChange}
                 onRename={onRename}
+                onReplaceTenant={onReplaceTenant}
                 onRemove={onRemove}
                 live={live}
               />

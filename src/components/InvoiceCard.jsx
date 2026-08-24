@@ -6,6 +6,7 @@ import {
   paymentStatusLabel,
   RATE_PER_UNIT,
   PAYMENT_AWAITING,
+  tenantNameForBill,
 } from '../utils/billing'
 
 export default function InvoiceCard({
@@ -47,7 +48,7 @@ export default function InvoiceCard({
         <header className="invoice-head">
           <div>
             <p className="home-kicker">Invoice</p>
-            <h1 className="page-title">{business?.name || bill.business_name}</h1>
+            <h1 className="page-title">{tenantNameForBill(bill, business)}</h1>
             <p className="page-lede">
               {cycle?.name || 'Billing cycle'}
               {' · '}
