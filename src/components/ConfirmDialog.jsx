@@ -1,3 +1,5 @@
+'use client'
+
 export default function ConfirmDialog({ message, detail, onConfirm, onCancel, confirmLabel = 'Confirm', danger = false }) {
   return (
     <div className="overlay" onClick={onCancel}>

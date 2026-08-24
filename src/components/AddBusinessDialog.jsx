@@ -1,8 +1,9 @@
+'use client'
+
 import { useState } from 'react'
 
 export default function AddBusinessDialog({ onAdd, onCancel }) {
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -11,7 +12,7 @@ export default function AddBusinessDialog({ onAdd, onCancel }) {
     setError(null)
     setBusy(true)
     try {
-      await onAdd({ name: name.trim(), email: email.trim() || null })
+      await onAdd({ name: name.trim() })
     } catch (err) {
       setError(err.message || 'Failed to add business.')
       setBusy(false)
@@ -32,18 +33,6 @@ export default function AddBusinessDialog({ onAdd, onCancel }) {
               onChange={e => setName(e.target.value)}
               required
               autoFocus
-            />
-          </div>
-          <div className="input-wrap">
-            <label htmlFor="new-biz-email">
-              Email <span className="optional-tag">optional — lets them log in to see their own bills</span>
-            </label>
-            <input
-              id="new-biz-email"
-              type="email"
-              className="reading-input auth-input"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
             />
           </div>
 

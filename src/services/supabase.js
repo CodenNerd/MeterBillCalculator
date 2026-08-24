@@ -1,9 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
+import { isLocalMode } from './localMode'
+import { createLocalClient } from './localClient'
+import { env } from '../lib/env'
+import { isValidPlazaSlug, slugifyPlazaName } from '../utils/plaza'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const SUPABASE_URL = env('NEXT_PUBLIC_SUPABASE_URL')
+const SUPABASE_ANON_KEY = env('NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+export const supabase = isLocalMode()
+  ? createLocalClient()
+  : createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 /**
  * Fetch all businesses for one complex, with their previous readings.
@@ -82,8 +88,7 @@ export async function removeBusiness(id) {
 
 /**
  * Save current readings as the new previous readings for all businesses.
- * Called at the end of each billing cycle.
- * @param {{ [id: number]: number } | Array<{ id: number, name: string, previous_reading: number }> } currentReadings
+ * Called when a cycle is concluded.
  */
 export async function saveCycleReadings(currentReadings) {
   const updates = Array.isArray(currentReadings)
@@ -101,49 +106,198 @@ export async function saveCycleReadings(currentReadings) {
   if (error) throw new Error(error.message)
 }
 
-/**
- * Save a completed billing cycle: the electricity-office bill, the
- * meter-calculated total, the resulting line loss, and each business's
- * final breakdown for that cycle — so it can be looked back on later.
- *
- * @param {{ actualBill: number, calculatedUnitTotal: number, totalMisc: number, lineLoss: number }} summary
- * @param {Array<{ id: number, name: string, prev: number, curr: number, units: number, unitAmount: number, misc: number, lineLossShare: number, finalAmount: number }>} rows
- */
-export async function saveBillingCycle(summary, rows, complexId) {
-  const { data: cycle, error: cycleError } = await supabase
-    .from('billing_cycles')
-    .insert({
-      actual_bill: summary.actualBill,
-      calculated_total: summary.calculatedUnitTotal,
-      total_misc: summary.totalMisc,
-      line_loss: summary.lineLoss,
+function mapBillRows(
+  cycleId,
+  complexId,
+  rows,
+  evidenceByBusiness = {},
+  paymentMetaByBusiness = {},
+) {
+  return rows.map(r => {
+    const evidence = evidenceByBusiness[r.id] || {}
+    const meta = paymentMetaByBusiness[r.id] || {}
+    const paymentStatus = evidence.paymentStatus
+      || meta.paymentStatus
+      || r.paymentStatus
+      || 'awaiting'
+    const amountPaid = evidence.amountPaid != null
+      ? evidence.amountPaid
+      : (meta.amountPaid != null ? meta.amountPaid : (r.amountPaid ?? null))
+    return {
+      cycle_id: cycleId,
       complex_id: complexId,
-    })
-    .select()
-    .single()
+      business_id: r.id,
+      business_name: r.name,
+      previous_reading: r.prev,
+      current_reading: r.curr,
+      units: r.units,
+      unit_amount: r.unitAmount,
+      misc: r.misc,
+      misc_note: r.note || r.miscNote || null,
+      line_loss_share: r.lineLossShare ?? 0,
+      final_amount: r.finalAmount ?? (r.unitAmount + r.misc),
+      evidence_note: evidence.note ?? meta.evidenceNote ?? null,
+      evidence_file_id: evidence.fileId ?? meta.evidenceFileId ?? null,
+      payment_status: paymentStatus,
+      amount_paid: amountPaid,
+    }
+  })
+}
 
-  if (cycleError) throw new Error(cycleError.message)
-
-  const businessRows = rows.map(r => ({
-    cycle_id: cycle.id,
+/**
+ * Publish a draft (create) or update an existing published cycle.
+ * Does not roll previous readings.
+ *
+ * @param {object} summary
+ * @param {Array} rows - calculateBills/applyLineLoss rows
+ * @param {string} complexId
+ * @param {number|string|null} existingCycleId
+ */
+export async function publishCycle(summary, rows, complexId, existingCycleId = null) {
+  const payload = {
+    actual_bill: summary.actualBill,
+    calculated_total: summary.calculatedUnitTotal,
+    total_misc: summary.totalMisc,
+    line_loss: summary.lineLoss,
+    allocation_method: summary.allocationMethod || 'equal',
     complex_id: complexId,
-    business_id: r.id,
-    business_name: r.name,
-    previous_reading: r.prev,
-    current_reading: r.curr,
-    units: r.units,
-    unit_amount: r.unitAmount,
-    misc: r.misc,
-    line_loss_share: r.lineLossShare ?? 0,
-    final_amount: r.finalAmount ?? (r.unitAmount + r.misc),
-  }))
+    name: summary.name || null,
+    cycle_date: summary.cycleDate || new Date().toISOString(),
+    status: 'published',
+  }
 
+  let cycle
+  let paymentMetaByBusiness = {}
+  if (existingCycleId) {
+    const existingRows = await fetchCycleDetail(existingCycleId)
+    paymentMetaByBusiness = Object.fromEntries(
+      (existingRows || []).map(r => [r.business_id, {
+        paymentStatus: r.payment_status || 'awaiting',
+        amountPaid: r.amount_paid ?? null,
+        evidenceNote: r.evidence_note ?? null,
+        evidenceFileId: r.evidence_file_id ?? null,
+      }]),
+    )
+
+    const { error: updateError } = await supabase
+      .from('billing_cycles')
+      .update(payload)
+      .eq('id', existingCycleId)
+
+    if (updateError) throw new Error(updateError.message)
+
+    const { error: delError } = await supabase
+      .from('cycle_business_bills')
+      .delete()
+      .eq('cycle_id', existingCycleId)
+
+    if (delError) throw new Error(delError.message)
+
+    const { data: refreshed, error: fetchError } = await supabase
+      .from('billing_cycles')
+      .select('*')
+      .eq('id', existingCycleId)
+      .single()
+
+    if (fetchError) throw new Error(fetchError.message)
+    cycle = refreshed
+  } else {
+    const { data, error } = await supabase
+      .from('billing_cycles')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) throw new Error(error.message)
+    cycle = data
+  }
+
+  const businessRows = mapBillRows(cycle.id, complexId, rows, {}, paymentMetaByBusiness)
+  const { error: rowsError } = await supabase
+    .from('cycle_business_bills')
+    .insert(businessRows)
+
+  if (rowsError) throw new Error(rowsError.message)
+  return cycle
+}
+
+/**
+ * Conclude a published cycle: lock it, attach evidence metadata, roll readings.
+ * Requires every tenant bill to be paid or unpaid (not awaiting).
+ *
+ * @param {number|string} cycleId
+ * @param {string} complexId
+ * @param {Array} rows - bill rows with id/curr for rolling readings
+ * @param {{ [businessId: string]: { note?: string, fileId?: string, paymentStatus?: string } }} evidenceByBusiness
+ */
+export async function concludeCycle(cycleId, complexId, rows, evidenceByBusiness = {}) {
+  const existing = await fetchCycleDetail(cycleId)
+  const statuses = rows.map(r => {
+    const fromDialog = evidenceByBusiness[r.id]?.paymentStatus
+    const fromDb = existing.find(b => String(b.business_id) === String(r.id))?.payment_status
+    return fromDialog || fromDb || 'awaiting'
+  })
+  if (statuses.some(s => s === 'awaiting')) {
+    throw new Error('Every tenant must be marked paid or didn’t pay before concluding.')
+  }
+
+  const { error: updateError } = await supabase
+    .from('billing_cycles')
+    .update({ status: 'concluded' })
+    .eq('id', cycleId)
+    .eq('complex_id', complexId)
+
+  if (updateError) throw new Error(updateError.message)
+
+  const { error: delError } = await supabase
+    .from('cycle_business_bills')
+    .delete()
+    .eq('cycle_id', cycleId)
+
+  if (delError) throw new Error(delError.message)
+
+  const paymentMetaByBusiness = Object.fromEntries(
+    rows.map(r => {
+      const existingRow = existing.find(b => String(b.business_id) === String(r.id))
+      const ev = evidenceByBusiness[r.id] || {}
+      return [r.id, {
+        paymentStatus: ev.paymentStatus || existingRow?.payment_status || 'unpaid',
+        amountPaid: ev.amountPaid != null
+          ? ev.amountPaid
+          : (existingRow?.amount_paid ?? null),
+        evidenceNote: existingRow?.evidence_note ?? null,
+        evidenceFileId: existingRow?.evidence_file_id ?? null,
+      }]
+    }),
+  )
+  const businessRows = mapBillRows(cycleId, complexId, rows, evidenceByBusiness, paymentMetaByBusiness)
   const { error: rowsError } = await supabase
     .from('cycle_business_bills')
     .insert(businessRows)
 
   if (rowsError) throw new Error(rowsError.message)
 
+  const readingUpdates = rows.map(r => ({
+    id: r.id,
+    previous_reading: r.curr,
+    updated_at: new Date().toISOString(),
+  }))
+  await saveCycleReadings(readingUpdates)
+
+  const { data: cycle, error: fetchError } = await supabase
+    .from('billing_cycles')
+    .select('*')
+    .eq('id', cycleId)
+    .single()
+
+  if (fetchError) throw new Error(fetchError.message)
+  return cycle
+}
+
+/** @deprecated Prefer publishCycle / concludeCycle */
+export async function saveBillingCycle(summary, rows, complexId) {
+  const cycle = await publishCycle(summary, rows, complexId, null)
+  await concludeCycle(cycle.id, complexId, rows, {})
   return cycle
 }
 
@@ -161,9 +315,18 @@ export async function fetchCycleHistory(complexId) {
   return data
 }
 
+export async function fetchPublishedCycles(complexId) {
+  const all = await fetchCycleHistory(complexId)
+  return all.filter(c => c.status === 'published')
+}
+
+export async function fetchConcludedCycles(complexId) {
+  const all = await fetchCycleHistory(complexId)
+  return all.filter(c => c.status === 'concluded' || !c.status)
+}
+
 /**
  * Fetch the per-business breakdown for one billing cycle.
- * @param {number} cycleId
  */
 export async function fetchCycleDetail(cycleId) {
   const { data, error } = await supabase
@@ -174,4 +337,267 @@ export async function fetchCycleDetail(cycleId) {
 
   if (error) throw new Error(error.message)
   return data
+}
+
+/**
+ * Fetch one billing cycle by id (scoped to a complex when provided).
+ */
+export async function fetchCycleById(cycleId, complexId) {
+  let query = supabase
+    .from('billing_cycles')
+    .select('*')
+    .eq('id', cycleId)
+
+  if (complexId) query = query.eq('complex_id', complexId)
+
+  const { data, error } = await query.maybeSingle()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/** Public fetch — any published/concluded cycle by id. */
+export async function fetchPublicCycle(cycleId) {
+  const cycle = await fetchCycleById(cycleId)
+  if (!cycle) return null
+  if (cycle.status && cycle.status !== 'published' && cycle.status !== 'concluded') {
+    return null
+  }
+  return cycle
+}
+
+export async function fetchBusinessById(businessId) {
+  const { data, error } = await supabase
+    .from('businesses')
+    .select('*')
+    .eq('id', businessId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/**
+ * Timeline of bills for one business across cycles.
+ */
+export async function fetchBusinessBillTimeline(businessId) {
+  const { data: bills, error } = await supabase
+    .from('cycle_business_bills')
+    .select('*')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+
+  const withCycles = await Promise.all(
+    (bills || []).map(async bill => {
+      const cycle = await fetchCycleById(bill.cycle_id)
+      return { bill, cycle }
+    }),
+  )
+
+  return withCycles.filter(item => item.cycle)
+}
+
+export async function updateBillPaymentStatus(billId, status) {
+  if (!['awaiting', 'paid', 'unpaid'].includes(status)) {
+    throw new Error('Invalid payment status')
+  }
+  const { data, error } = await supabase
+    .from('cycle_business_bills')
+    .update({ payment_status: status })
+    .eq('id', billId)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function updateBillPaymentStatusByBusiness(cycleId, businessId, status) {
+  if (!['awaiting', 'paid', 'unpaid'].includes(status)) {
+    throw new Error('Invalid payment status')
+  }
+  const { data, error } = await supabase
+    .from('cycle_business_bills')
+    .update({ payment_status: status })
+    .eq('cycle_id', cycleId)
+    .eq('business_id', businessId)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/**
+ * Mark or clear payment on a tenant bill (status, amount paid, optional evidence).
+ */
+export async function markBillPayment({
+  cycleId,
+  businessId,
+  status,
+  amountPaid = null,
+  note = undefined,
+  fileId = undefined,
+}) {
+  if (!['awaiting', 'paid', 'unpaid'].includes(status)) {
+    throw new Error('Invalid payment status')
+  }
+  const payload = {
+    payment_status: status,
+    amount_paid: status === 'awaiting'
+      ? null
+      : (status === 'unpaid' ? 0 : (amountPaid == null ? null : Number(amountPaid))),
+  }
+
+  if (status === 'awaiting') {
+    payload.evidence_note = null
+    payload.evidence_file_id = null
+  } else {
+    if (note !== undefined) payload.evidence_note = note || null
+    if (fileId !== undefined) payload.evidence_file_id = fileId || null
+  }
+
+  const { data, error } = await supabase
+    .from('cycle_business_bills')
+    .update(payload)
+    .eq('cycle_id', cycleId)
+    .eq('business_id', businessId)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function fetchComplexSettings(complexId) {
+  const { data, error } = await supabase
+    .from('complexes')
+    .select('id, name, bank_name, account_name, account_number, rate_per_unit, banner_text, banner_enabled')
+    .eq('id', complexId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function saveComplexSettings(complexId, patch) {
+  const payload = {
+    bank_name: patch.bank_name || null,
+    account_name: patch.account_name || null,
+    account_number: patch.account_number || null,
+    rate_per_unit: Number(patch.rate_per_unit) > 0 ? Number(patch.rate_per_unit) : 250,
+    banner_text: patch.banner_text || null,
+    banner_enabled: Boolean(patch.banner_enabled),
+  }
+  const { data, error } = await supabase
+    .from('complexes')
+    .update(payload)
+    .eq('id', complexId)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function fetchBusinessCycleBill(businessId, cycleId) {
+  const { data: bill, error } = await supabase
+    .from('cycle_business_bills')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('cycle_id', cycleId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!bill) return null
+
+  const cycle = await fetchCycleById(cycleId)
+  return { bill, cycle }
+}
+
+export async function fetchPlazaBySlug(slug) {
+  if (!slug) return null
+  const { data, error } = await supabase
+    .from('complexes')
+    .select('*')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function listPlazas() {
+  const { data, error } = await supabase
+    .from('complexes')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+/**
+ * Superadmin: create a plaza with slug and invite email.
+ */
+export async function createPlaza({ name, slug, ownerEmail }) {
+  const normalized = (slug || slugifyPlazaName(name)).toLowerCase()
+  if (!isValidPlazaSlug(normalized)) {
+    throw new Error('Invalid plaza slug. Use lowercase letters, numbers, and hyphens.')
+  }
+  const email = (ownerEmail || '').trim().toLowerCase() || null
+
+  const payload = {
+    name: (name || '').trim() || 'Untitled Plaza',
+    slug: normalized,
+    owner_email: email,
+    owner_id: null,
+  }
+
+  const { data, error } = await supabase
+    .from('complexes')
+    .insert(payload)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function updatePlaza(plazaId, patch) {
+  const payload = {}
+  if (patch.name != null) payload.name = patch.name
+  if (patch.slug != null) {
+    if (!isValidPlazaSlug(patch.slug)) throw new Error('Invalid plaza slug')
+    payload.slug = patch.slug
+  }
+  if (patch.owner_email !== undefined) {
+    payload.owner_email = patch.owner_email
+      ? String(patch.owner_email).trim().toLowerCase()
+      : null
+  }
+
+  const { data, error } = await supabase
+    .from('complexes')
+    .update(payload)
+    .eq('id', plazaId)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/** Fetch cycle and ensure it belongs to the plaza identified by slug. */
+export async function fetchPublicCycleForPlaza(cycleId, plazaSlug) {
+  const plaza = await fetchPlazaBySlug(plazaSlug)
+  if (!plaza) return null
+  const cycle = await fetchCycleById(cycleId)
+  if (!cycle) return null
+  if (cycle.status && cycle.status !== 'published' && cycle.status !== 'concluded') {
+    return null
+  }
+  if (String(cycle.complex_id) !== String(plaza.id)) return null
+  return { cycle, plaza }
 }

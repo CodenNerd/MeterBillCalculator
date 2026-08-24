@@ -1,7 +1,10 @@
+'use client'
+
 import { useState } from 'react'
 
 export function useStorage(key, fallback) {
   const [value, setValue] = useState(() => {
+    if (typeof window === 'undefined') return fallback
     try {
       const raw = localStorage.getItem(key)
       return raw ? JSON.parse(raw) : fallback
@@ -12,12 +15,16 @@ export function useStorage(key, fallback) {
 
   function set(newValue) {
     setValue(newValue)
-    localStorage.setItem(key, JSON.stringify(newValue))
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(newValue))
+    }
   }
 
   function clear() {
     setValue(fallback)
-    localStorage.removeItem(key)
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(key)
+    }
   }
 
   return [value, set, clear]
