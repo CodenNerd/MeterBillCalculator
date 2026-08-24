@@ -4,12 +4,14 @@ const nextConfig = {
   // Required on Next 14 for src/instrumentation.js (local auto-migrate).
   experimental: {
     instrumentationHook: true,
-    // Keep migrate assets in serverless traces (fallback cold-start migrate).
+    serverComponentsExternalPackages: ['@sparticuz/chromium', 'puppeteer-core'],
+    // Keep migrate assets + Chromium binaries in serverless traces.
     outputFileTracingIncludes: {
       '/*': [
         './supabase-bootstrap.sql',
         './scripts/run-migrations.mjs',
         './src/lib/dbMigrate.mjs',
+        './node_modules/@sparticuz/chromium/**/*',
       ],
     },
   },

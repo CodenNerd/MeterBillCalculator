@@ -10,9 +10,11 @@
     "db:migrate": "node scripts/run-migrations.mjs"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
     "@supabase/supabase-js": "^2.110.5",
     "next": "^14.2.35",
     "pg": "^8.23.0",
+    "puppeteer-core": "^25.8.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
