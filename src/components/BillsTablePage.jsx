@@ -11,6 +11,8 @@ import {
   fetchCycleDetail,
   fetchPublicCycle,
   fetchPublicCycleForPlaza,
+  fetchComplexSettings,
+  fetchPlazaBySlug,
   markBillPayment,
 } from '../services/supabase'
 import { putEvidence, evidenceKey } from '../services/evidenceStore'
@@ -113,6 +115,7 @@ export default function BillsTablePage({
   const [shareHint, setShareHint] = useState(null)
   const [markTarget, setMarkTarget] = useState(null)
   const [showPaymentStatus, setShowPaymentStatus] = useState(false)
+  const [paySettings, setPaySettings] = useState(null)
 
   useEffect(() => {
     try {
@@ -218,6 +221,28 @@ export default function BillsTablePage({
       })
     return () => { cancelled = true }
   }, [mode, cycleId, complexId, plazaSlug])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadPaySettings() {
+      try {
+        let settings = null
+        const id = complexId || saved?.cycle?.complex_id || null
+        if (id) {
+          settings = await fetchComplexSettings(id)
+        } else if (plazaSlug) {
+          settings = await fetchPlazaBySlug(plazaSlug)
+        }
+        if (!cancelled) setPaySettings(settings)
+      } catch {
+        if (!cancelled) setPaySettings(null)
+      }
+    }
+
+    loadPaySettings()
+    return () => { cancelled = true }
+  }, [complexId, plazaSlug, saved?.cycle?.complex_id, mode])
 
   const result = useMemo(() => {
     if (mode === 'draft') return draftResult
@@ -382,15 +407,19 @@ export default function BillsTablePage({
   }
 
   async function applyMarkPayment({ status, amountPaid, note, file }) {
-    if (!cycleId || !complexId || !markTarget) return
+    if (!cycleId || !complexId || !markTarget?.row) return
+    const businessId = markTarget.row.id
+    if (businessId == null) {
+      throw new Error('Missing business id for this bill row.')
+    }
     let fileId = null
     if (file) {
-      fileId = evidenceKey(complexId, cycleId, markTarget.id)
+      fileId = evidenceKey(complexId, cycleId, businessId)
       await putEvidence(fileId, file)
     }
     const updated = await markBillPayment({
       cycleId,
-      businessId: markTarget.id,
+      businessId,
       status,
       amountPaid,
       note: note || '',
@@ -401,7 +430,7 @@ export default function BillsTablePage({
       return {
         ...prev,
         rows: prev.rows.map(r =>
-          String(r.business_id) === String(markTarget.id)
+          String(r.business_id) === String(businessId)
             ? {
                 ...r,
                 payment_status: updated.payment_status,
@@ -418,7 +447,7 @@ export default function BillsTablePage({
   }
 
   async function handleClearPayment(row) {
-    if (!cycleId) return
+    if (!cycleId || row?.id == null) return
     try {
       const updated = await markBillPayment({
         cycleId,
@@ -538,69 +567,109 @@ export default function BillsTablePage({
 
         <section className="card bills-hero bills-table-header-card">
           <div className="bills-page-head">
-            <div>
+            <div className="bills-page-intro">
               <p className="home-kicker">{statusLabel}</p>
               <h2 className="page-title bills-page-title">{displayName}</h2>
               <p className="page-lede">
                 {titleDate}
                 {splitCaption ? ` · ${splitCaption}` : ''}
               </p>
-            </div>
-            <div className="bills-toolbar no-print">
-              <div className="bills-toolbar-group">
-                <span className="bills-toolbar-label">View</span>
-                <div className="payment-view-toggle" role="group" aria-label="Payment status display">
-                  <button
-                    type="button"
-                    className={`payment-view-tab ${!showPaymentStatus ? 'active' : ''}`}
-                    onClick={() => setPaymentStatusVisible(false)}
-                  >
-                    Amounts
-                  </button>
-                  <button
-                    type="button"
-                    className={`payment-view-tab ${showPaymentStatus ? 'active' : ''}`}
-                    onClick={() => setPaymentStatusVisible(true)}
-                  >
-                    With status
-                  </button>
+
+              {(paySettings?.account_name || paySettings?.bank_name || paySettings?.account_number) ? (
+                <div className="bills-payinto">
+                  <p className="bills-payinto-kicker">Pay into</p>
+                  <div className="bills-payinto-grid">
+                    {paySettings.account_name && (
+                      <div className="bills-payinto-item">
+                        <span className="invoice-pay-label">Account name</span>
+                        <strong>{paySettings.account_name}</strong>
+                      </div>
+                    )}
+                    {paySettings.bank_name && (
+                      <div className="bills-payinto-item">
+                        <span className="invoice-pay-label">Bank</span>
+                        <strong>{paySettings.bank_name}</strong>
+                      </div>
+                    )}
+                    {paySettings.account_number && (
+                      <div className="bills-payinto-item">
+                        <span className="invoice-pay-label">Account number</span>
+                        <strong className="mono">{paySettings.account_number}</strong>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              ) : (
+                isAdmin && !isClientView && (
+                  <p className="bills-payinto-empty muted no-print">
+                    No pay-into account yet.{' '}
+                    <button
+                      type="button"
+                      className="btn-text"
+                      onClick={() => navigate(cycleHref('/settings'))}
+                    >
+                      Add it in Settings
+                    </button>
+                  </p>
+                )
+              )}
+
+              <div className="bills-toolbar no-print">
+                <div className="bills-toolbar-group">
+                  <span className="bills-toolbar-label">Payment Status</span>
+                  <div className="payment-view-toggle" role="group" aria-label="Payment status display">
+                    <button
+                      type="button"
+                      className={`payment-view-tab ${showPaymentStatus ? 'active' : ''}`}
+                      onClick={() => setPaymentStatusVisible(true)}
+                    >
+                      Show
+                    </button>
+                    <button
+                      type="button"
+                      className={`payment-view-tab ${!showPaymentStatus ? 'active' : ''}`}
+                      onClick={() => setPaymentStatusVisible(false)}
+                    >
+                      Hide
+                    </button>
+                  </div>
+                </div>
+
+                {(canPreviewShared || (canManage && isPublished && onEditWorksheet)) && (
+                  <div className="bills-toolbar-group">
+                    <span className="bills-toolbar-label">Manage</span>
+                    <div className="bills-toolbar-actions">
+                      {canPreviewShared && (
+                        <button className="btn btn-sm btn-ghost" onClick={enterPreview}>
+                          Preview shared view
+                        </button>
+                      )}
+                      {canManage && isPublished && onEditWorksheet && (
+                        <button className="btn btn-sm btn-ghost" onClick={onEditWorksheet}>
+                          Edit worksheet
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {canShare && (
+                  <div className="bills-toolbar-group">
+                    <span className="bills-toolbar-label">Share</span>
+                    <div className="bills-toolbar-actions">
+                      <button className="btn btn-sm btn-ghost" onClick={() => window.print()}>
+                        Print
+                      </button>
+                      <button className="btn btn-sm btn-ghost" onClick={handleShare}>
+                        Share
+                      </button>
+                      <button className="btn btn-sm btn-primary" onClick={handleWhatsAppShare}>
+                        WhatsApp
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              {(canPreviewShared || (canManage && isPublished && onEditWorksheet)) && (
-                <div className="bills-toolbar-group">
-                  <span className="bills-toolbar-label">Manage</span>
-                  <div className="bills-toolbar-actions">
-                    {canPreviewShared && (
-                      <button className="btn btn-sm btn-ghost" onClick={enterPreview}>
-                        Preview shared view
-                      </button>
-                    )}
-                    {canManage && isPublished && onEditWorksheet && (
-                      <button className="btn btn-sm btn-ghost" onClick={onEditWorksheet}>
-                        Edit worksheet
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {canShare && (
-                <div className="bills-toolbar-group">
-                  <span className="bills-toolbar-label">Share</span>
-                  <div className="bills-toolbar-actions">
-                    <button className="btn btn-sm btn-ghost" onClick={() => window.print()}>
-                      Print
-                    </button>
-                    <button className="btn btn-sm btn-ghost" onClick={handleShare}>
-                      Share
-                    </button>
-                    <button className="btn btn-sm btn-primary" onClick={handleWhatsAppShare}>
-                      WhatsApp
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 

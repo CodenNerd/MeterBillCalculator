@@ -1,7 +1,7 @@
 'use client'
 
 import { RATE_PER_UNIT } from '../utils/billing'
-import { signOut, isLocalMode } from '../services/auth'
+import { signOut } from '../services/auth'
 import { navigate } from '../utils/navigation'
 import { plazaPath } from '../utils/plaza'
 
@@ -46,7 +46,6 @@ export default function Header({
             <Wordmark />
           </button>
           {complexName && <span className="complex-label">{complexName}</span>}
-          {isLocalMode() && <span className="meta-label meta-label--local">Local demo</span>}
         </div>
         <div className="header-meta">
           <span className="meta-rate">₦{rate}/kWh</span>

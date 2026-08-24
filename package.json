@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "db:migrate": "node scripts/run-migrations.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.5",

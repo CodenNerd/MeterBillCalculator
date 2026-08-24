@@ -1,16 +1,23 @@
 import { createClient } from '@supabase/supabase-js'
-import { isLocalMode } from './localMode'
-import { createLocalClient } from './localClient'
-import { env } from '../lib/env'
-import { isValidPlazaSlug, slugifyPlazaName } from '../utils/plaza'
+import { getSupabaseUrl, getSupabasePublishableKey, isSupabaseConfigured } from '../lib/env'
+import { isValidPlazaSlug } from '../utils/plaza'
 
-const SUPABASE_URL = env('NEXT_PUBLIC_SUPABASE_URL')
-const SUPABASE_ANON_KEY = env('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+const SUPABASE_URL = getSupabaseUrl()
+const SUPABASE_PUBLISHABLE_KEY = getSupabasePublishableKey()
 
-export const supabase = isLocalMode()
-  ? createLocalClient()
-  : createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+export const supabaseConfigured = isSupabaseConfigured()
 
+if (!supabaseConfigured) {
+  console.warn(
+    'Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env, then restart npm run dev.',
+  )
+}
+
+/** Placeholder client only when unset — real calls will fail until .env is filled. */
+export const supabase = createClient(
+  SUPABASE_URL || 'https://placeholder.supabase.co',
+  SUPABASE_PUBLISHABLE_KEY || 'placeholder-publishable-key',
+)
 /**
  * Fetch all businesses for one complex, with their previous readings.
  * Returns: [{ id, name, email, previous_reading }]
@@ -168,8 +175,10 @@ export async function publishCycle(summary, rows, complexId, existingCycleId = n
 
   let cycle
   let paymentMetaByBusiness = {}
-  if (existingCycleId) {
-    const existingRows = await fetchCycleDetail(existingCycleId)
+  let cycleId = existingCycleId
+
+  if (cycleId) {
+    const existingRows = await fetchCycleDetail(cycleId)
     paymentMetaByBusiness = Object.fromEntries(
       (existingRows || []).map(r => [r.business_id, {
         paymentStatus: r.payment_status || 'awaiting',
@@ -179,29 +188,44 @@ export async function publishCycle(summary, rows, complexId, existingCycleId = n
       }]),
     )
 
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from('billing_cycles')
       .update(payload)
-      .eq('id', existingCycleId)
+      .eq('id', cycleId)
+      .select()
+      .maybeSingle()
 
     if (updateError) throw new Error(updateError.message)
 
-    const { error: delError } = await supabase
-      .from('cycle_business_bills')
-      .delete()
-      .eq('cycle_id', existingCycleId)
+    if (!updated) {
+      // Stale localStorage id (e.g. from old demo) or RLS blocked the update.
+      const { data: exists, error: existsError } = await supabase
+        .from('billing_cycles')
+        .select('id')
+        .eq('id', cycleId)
+        .maybeSingle()
+      if (existsError) throw new Error(existsError.message)
+      if (exists) {
+        throw new Error(
+          'Could not update this cycle. Sign in as the plaza admin (or superadmin) and try again.',
+        )
+      }
+      // Cycle does not exist — create a new one instead of patching a ghost id.
+      cycleId = null
+      paymentMetaByBusiness = {}
+    } else {
+      cycle = updated
 
-    if (delError) throw new Error(delError.message)
+      const { error: delError } = await supabase
+        .from('cycle_business_bills')
+        .delete()
+        .eq('cycle_id', cycle.id)
 
-    const { data: refreshed, error: fetchError } = await supabase
-      .from('billing_cycles')
-      .select('*')
-      .eq('id', existingCycleId)
-      .single()
+      if (delError) throw new Error(delError.message)
+    }
+  }
 
-    if (fetchError) throw new Error(fetchError.message)
-    cycle = refreshed
-  } else {
+  if (!cycle) {
     const { data, error } = await supabase
       .from('billing_cycles')
       .insert(payload)
@@ -440,6 +464,9 @@ export async function markBillPayment({
   note = undefined,
   fileId = undefined,
 }) {
+  if (cycleId == null || businessId == null || businessId === '' || businessId === 'undefined') {
+    throw new Error('cycleId and businessId are required to update payment.')
+  }
   if (!['awaiting', 'paid', 'unpaid'].includes(status)) {
     throw new Error('Invalid payment status')
   }
@@ -539,30 +566,29 @@ export async function listPlazas() {
 }
 
 /**
- * Superadmin: create a plaza with slug and invite email.
+ * Superadmin: create a plaza and provision plaza-admin login (email + password)
+ * via the service-role API.
  */
-export async function createPlaza({ name, slug, ownerEmail }) {
-  const normalized = (slug || slugifyPlazaName(name)).toLowerCase()
-  if (!isValidPlazaSlug(normalized)) {
-    throw new Error('Invalid plaza slug. Use lowercase letters, numbers, and hyphens.')
-  }
-  const email = (ownerEmail || '').trim().toLowerCase() || null
-
-  const payload = {
-    name: (name || '').trim() || 'Untitled Plaza',
-    slug: normalized,
-    owner_email: email,
-    owner_id: null,
+export async function createPlaza({ name, slug, ownerEmail, ownerPassword }) {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) {
+    throw new Error('You must be signed in as superadmin to create a plaza.')
   }
 
-  const { data, error } = await supabase
-    .from('complexes')
-    .insert(payload)
-    .select()
-    .single()
+  const res = await fetch('/api/superadmin/plazas', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ name, slug, ownerEmail, ownerPassword }),
+  })
 
-  if (error) throw new Error(error.message)
-  return data
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(payload.error || 'Could not create plaza')
+  }
+  return payload.plaza
 }
 
 export async function updatePlaza(plazaId, patch) {

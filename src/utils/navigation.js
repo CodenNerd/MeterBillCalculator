@@ -2,7 +2,7 @@
 
 /**
  * Imperative navigation for call sites that are not React components.
- * Bound once from NavigationBinder in the root providers.
+ * Bound from NavigationBinder in the root providers (synchronously on render).
  */
 let pushImpl = null
 
@@ -17,6 +17,9 @@ export function navigate(path) {
     return
   }
   if (typeof window !== 'undefined') {
-    window.location.href = normalized
+    // Should be rare: NavigationBinder binds during render before children run.
+    console.warn('navigate() called before router bind; using history API')
+    window.history.pushState({}, '', normalized)
+    window.dispatchEvent(new PopStateEvent('popstate'))
   }
 }

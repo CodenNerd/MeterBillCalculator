@@ -101,32 +101,32 @@ export default function CyclePage({
       </header>
 
       <section className="card general-bill-panel">
-        <div className="cycle-meta-row">
-          <div className="input-wrap">
-            <label htmlFor="cycle-date">Cycle date</label>
-            <input
-              id="cycle-date"
-              type="date"
-              className="reading-input"
-              value={cycleDate}
-              onChange={e => onCycleDateChange(e.target.value)}
-            />
-          </div>
-          <div className="input-wrap">
-            <label htmlFor="cycle-name">Cycle name / alias</label>
-            <input
-              id="cycle-name"
-              type="text"
-              className="reading-input"
-              placeholder="e.g. March 2026"
-              value={cycleName}
-              onChange={e => onCycleNameChange(e.target.value)}
-            />
-          </div>
-        </div>
-
         <div className="general-bill-layout">
           <div className="general-bill-controls">
+            <div className="cycle-meta-row">
+              <div className="input-wrap">
+                <label htmlFor="cycle-date">Cycle date</label>
+                <input
+                  id="cycle-date"
+                  type="date"
+                  className="reading-input"
+                  value={cycleDate}
+                  onChange={e => onCycleDateChange(e.target.value)}
+                />
+              </div>
+              <div className="input-wrap">
+                <label htmlFor="cycle-name">Cycle name / alias</label>
+                <input
+                  id="cycle-name"
+                  type="text"
+                  className="reading-input"
+                  placeholder="e.g. March 2026"
+                  value={cycleName}
+                  onChange={e => onCycleNameChange(e.target.value)}
+                />
+              </div>
+            </div>
+
             <div className="input-wrap">
               <label htmlFor="actual-bill">NEPA office bill (₦)</label>
               <input

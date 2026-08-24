@@ -15,21 +15,44 @@ import {
  */
 export function useBusinesses(complexId) {
   const [businesses, setBusinesses] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(Boolean(complexId))
   const [error, setError] = useState(null)
 
-  // Load businesses from DB whenever we know which complex we're in
   useEffect(() => {
-    if (complexId) load()
+    if (!complexId) {
+      setBusinesses([])
+      setError(null)
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const data = await fetchBusinesses(complexId)
+        if (!cancelled) setBusinesses(data)
+      } catch {
+        if (!cancelled) setError('Failed to load data. Check your connection.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
   }, [complexId])
 
   async function load() {
+    if (!complexId) {
+      setBusinesses([])
+      setLoading(false)
+      return
+    }
     try {
       setLoading(true)
       setError(null)
       const data = await fetchBusinesses(complexId)
       setBusinesses(data)
-    } catch (err) {
+    } catch {
       setError('Failed to load data. Check your connection.')
     } finally {
       setLoading(false)
@@ -53,7 +76,7 @@ export function useBusinesses(complexId) {
       setBusinesses(prev =>
         prev.map(b => b.id === id ? { ...b, name: newName } : b)
       )
-    } catch (err) {
+    } catch {
       setError('Failed to rename business.')
     }
   }
@@ -62,7 +85,7 @@ export function useBusinesses(complexId) {
     try {
       await removeBusiness(id)
       setBusinesses(prev => prev.filter(b => b.id !== id))
-    } catch (err) {
+    } catch {
       setError('Failed to remove business.')
     }
   }
@@ -75,7 +98,7 @@ export function useBusinesses(complexId) {
       setBusinesses(prev =>
         prev.map(b => (b.id === id ? { ...b, previous_reading: nextReading } : b))
       )
-    } catch (err) {
+    } catch {
       setError('Failed to update previous reading.')
     }
   }
@@ -96,7 +119,6 @@ export function useBusinesses(complexId) {
 
       await saveCycleReadings(updates)
 
-      // Update local state so UI reflects new previous readings immediately
       setBusinesses(prev =>
         prev.map(b => ({
           ...b,
@@ -105,7 +127,7 @@ export function useBusinesses(complexId) {
       )
     } catch (err) {
       setError('Failed to save readings.')
-      throw err // re-throw so App.jsx can handle it
+      throw err
     }
   }
 

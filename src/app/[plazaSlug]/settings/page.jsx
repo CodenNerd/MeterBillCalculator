@@ -14,7 +14,10 @@ export default function SettingsPage() {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    if (!complex?.id) return
+    if (!complex?.id) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     fetchComplexSettings(complex.id)
       .then(data => {
