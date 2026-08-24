@@ -1,8 +1,8 @@
 'use client'
 
-import CyclePage from '../../components/CyclePage'
-import { AdminGate, useBilling } from '../../components/providers/BillingProvider'
-import { ALLOCATION_EQUAL } from '../../utils/billing'
+import CyclePage from '../../../components/CyclePage'
+import { AdminGate, useBilling } from '../../../components/providers/BillingProvider'
+import { ALLOCATION_EQUAL } from '../../../utils/billing'
 
 export default function CycleWorksheetPage() {
   const b = useBilling()
@@ -20,6 +20,8 @@ export default function CycleWorksheetPage() {
         cycleDate={b.cycleDate}
         cycleName={b.cycleName}
         activeCycleId={b.activeCycleId}
+        ratePerUnit={b.ratePerUnit}
+        href={b.href}
         onCurrentChange={b.handleCurrentChange}
         onMiscChange={b.handleMiscChange}
         onNoteChange={b.handleNoteChange}

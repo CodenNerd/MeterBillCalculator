@@ -1,14 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { signUpAdmin, signInAdmin, startLocalDemo, isLocalMode } from '../services/auth'
+import {
+  signUpAdmin,
+  signInAdmin,
+  startLocalDemo,
+  startLocalSuperadmin,
+  isLocalMode,
+} from '../services/auth'
 import { Wordmark } from './Header'
 
 export default function AuthGate() {
   const [mode, setMode] = useState('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [complexName, setComplexName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
@@ -32,6 +37,19 @@ export default function AuthGate() {
     }
   }
 
+  async function handleSuperDemo() {
+    setError(null)
+    setNotice(null)
+    setBusy(true)
+    try {
+      await startLocalSuperadmin()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
@@ -39,7 +57,7 @@ export default function AuthGate() {
     setBusy(true)
     try {
       if (mode === 'signup') {
-        const res = await signUpAdmin(email, password, complexName)
+        const res = await signUpAdmin(email, password)
         if (!res.session) {
           setNotice('Check your email to confirm your account, then sign in below.')
           setMode('signin')
@@ -61,7 +79,7 @@ export default function AuthGate() {
           <div className="auth-hero">
             <Wordmark className="wordmark--hero" />
             <p className="auth-tagline">
-              Shared electricity billing for your complex.
+              Shared electricity billing for your plaza.
             </p>
           </div>
 
@@ -80,34 +98,31 @@ export default function AuthGate() {
                   onClick={handleDemo}
                   disabled={busy}
                 >
-                  {busy ? 'Please wait...' : 'Start with sample data'}
+                  {busy ? 'Please wait...' : 'Start as plaza admin (sample data)'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline auth-demo-btn"
+                  onClick={handleSuperDemo}
+                  disabled={busy}
+                  style={{ marginTop: 8 }}
+                >
+                  Start as superadmin
                 </button>
                 <div className="auth-divider"><span>or sign in locally</span></div>
               </>
             )}
 
             <h2 className="card-title auth-title">
-              {mode === 'signin' ? 'Admin sign in' : 'Create admin account'}
+              {mode === 'signin' ? 'Sign in' : 'Create plaza admin account'}
             </h2>
             <p className="card-sub auth-subtitle">
               {isLocalMode()
-                ? 'Any email and password work in demo mode.'
-                : 'For complex / plaza administrators.'}
+                ? 'Any email and password work in demo mode. Superadmin: superadmin@local.test / demo123'
+                : 'Plaza admins are invited by a superadmin. Sign up with your invited email.'}
             </p>
 
             <form onSubmit={handleSubmit} className="auth-form">
-              {mode === 'signup' && (
-                <div className="input-wrap">
-                  <label htmlFor="complex-name">Complex / plaza name</label>
-                  <input
-                    id="complex-name"
-                    className="reading-input auth-input"
-                    value={complexName}
-                    onChange={e => setComplexName(e.target.value)}
-                    required
-                  />
-                </div>
-              )}
               <div className="input-wrap">
                 <label htmlFor="auth-email">Email</label>
                 <input

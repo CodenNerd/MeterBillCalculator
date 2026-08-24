@@ -26,7 +26,7 @@ function CycleRow({ cycle, onClick }) {
         </span>
       </span>
       <span className="home-cycle-meta">
-        <span className="home-cycle-bill-label">Office bill</span>
+        <span className="home-cycle-bill-label">NEPA office bill</span>
         <span className="home-cycle-bill">{formatNaira(cycle.actual_bill)}</span>
       </span>
       <span className={`home-cycle-extra ${cycle.line_loss >= 0 ? 'loss-positive' : 'loss-negative'}`}>
@@ -45,6 +45,8 @@ function CycleRow({ cycle, onClick }) {
 export default function Home({
   complexId,
   complexName,
+  plazaSlug,
+  href,
   current,
   misc,
   notes,
@@ -52,11 +54,14 @@ export default function Home({
   activeCycleId,
   onRefreshKey,
   onContinuePublished,
+  bannerEnabled,
+  bannerText,
 }) {
   const [published, setPublished] = useState(null)
   const [concluded, setConcluded] = useState(null)
   const [error, setError] = useState(null)
   const draftOpen = hasDraftProgress(current, misc, actualBill, notes)
+  const go = (path) => navigate(href ? href(path) : path)
 
   useEffect(() => {
     if (!complexId) return
@@ -80,6 +85,12 @@ export default function Home({
 
   return (
     <main className="main main--home">
+      {bannerEnabled && bannerText?.trim() && (
+        <div className="home-banner" role="status">
+          {bannerText.trim()}
+        </div>
+      )}
+
       <section className="home-hero-band">
         <div className="home-hero-copy-block">
           <p className="home-kicker">{complexName || 'Your complex'}</p>
@@ -111,13 +122,13 @@ export default function Home({
               </button>
               <button
                 className="btn btn-ghost"
-                onClick={() => navigate(`/cycles/${latestPublished.id}`)}
+                onClick={() => go(`/cycles/${latestPublished.id}`)}
               >
                 View bills
               </button>
             </div>
           ) : (
-            <button className="btn btn-primary btn-lg" onClick={() => navigate('/cycle')}>
+            <button className="btn btn-primary btn-lg" onClick={() => go('/cycle')}>
               {showDraftCallout ? 'Continue cycle' : 'Start cycle'}
             </button>
           )}
@@ -137,7 +148,7 @@ export default function Home({
               <CycleRow
                 key={cycle.id}
                 cycle={cycle}
-                onClick={() => navigate(`/cycles/${cycle.id}`)}
+                onClick={() => go(`/cycles/${cycle.id}`)}
               />
             ))}
           </div>
@@ -177,7 +188,7 @@ export default function Home({
               <CycleRow
                 key={cycle.id}
                 cycle={cycle}
-                onClick={() => navigate(`/cycles/${cycle.id}`)}
+                onClick={() => go(`/cycles/${cycle.id}`)}
               />
             ))}
           </div>

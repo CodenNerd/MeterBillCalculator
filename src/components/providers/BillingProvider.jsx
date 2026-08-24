@@ -18,6 +18,7 @@ import {
   fetchCycleDetail,
 } from '../../services/supabase'
 import { navigate } from '../../utils/navigation'
+import { plazaPath } from '../../utils/plaza'
 import Header from '../Header'
 import ConfirmDialog from '../ConfirmDialog'
 import AddBusinessDialog from '../AddBusinessDialog'
@@ -36,11 +37,22 @@ export function BillingProvider({ children }) {
   const pathname = usePathname()
   const params = useParams()
   const cycleParam = params?.id
+  const plazaSlugParam = params?.plazaSlug || null
 
-  const { session, complex, ready, authError } = useAuth()
+  const { session, role, complex, ready, authError, setComplex } = useAuth()
+
+  const plazaSlug = plazaSlugParam || complex?.slug || null
+
+  function href(path = '/') {
+    return plazaPath(plazaSlug, path)
+  }
 
   const { businesses, loading, error, add, rename, remove, reload } =
     useBusinesses(complex?.id)
+
+  const ratePerUnit = Number(complex?.rate_per_unit) > 0
+    ? Number(complex.rate_per_unit)
+    : 250
 
   const [current, setCurrent] = useStorage('mc_current', {})
   const [misc, setMisc] = useStorage('mc_misc', {})
@@ -68,8 +80,9 @@ export function BillingProvider({ children }) {
       actualBill,
       allocationMethod,
       notes,
+      ratePerUnit,
     ),
-    [businesses, current, misc, notes, actualBill, allocationMethod],
+    [businesses, current, misc, notes, actualBill, allocationMethod, ratePerUnit],
   )
 
   function showToast(msg) {
@@ -155,7 +168,7 @@ export function BillingProvider({ children }) {
       return null
     }
     if (cycle.status === 'concluded') {
-      navigate(`/cycles/${cycleId}`)
+      navigate(href(`/cycles/${cycleId}`))
       return cycle
     }
 
@@ -181,7 +194,7 @@ export function BillingProvider({ children }) {
   async function handleContinuePublished(cycleId) {
     try {
       await hydrateFromCycle(cycleId)
-      navigate('/cycle')
+      navigate(href('/cycle'))
     } catch {
       showToast('Could not open published cycle')
     }
@@ -190,7 +203,7 @@ export function BillingProvider({ children }) {
   function resolveExistingCycleId(overrides = {}) {
     if (overrides.cycleId != null) return overrides.cycleId
     if (activeCycleId != null) return activeCycleId
-    if (pathname?.startsWith('/cycles/') && cycleParam && cycleParam !== 'draft') {
+    if (pathname?.includes('/cycles/') && cycleParam && cycleParam !== 'draft') {
       return cycleParam
     }
     return null
@@ -222,7 +235,7 @@ export function BillingProvider({ children }) {
     setCycleDate(toDateInputValue(cycle.cycle_date || dateValue))
     setHistoryKey(k => k + 1)
     showToast(existingId ? 'Published cycle updated' : 'Cycle published')
-    navigate(`/cycles/${cycle.id}`)
+    navigate(href(`/cycles/${cycle.id}`))
     return cycle
   }
 
@@ -255,7 +268,7 @@ export function BillingProvider({ children }) {
       clearDraft()
       setHistoryKey(k => k + 1)
       await reload()
-      navigate('/')
+      navigate(href('/'))
       showToast('Cycle concluded')
     } catch (err) {
       showToast('Conclude failed. Please try again.')
@@ -265,7 +278,11 @@ export function BillingProvider({ children }) {
 
   const value = {
     session,
+    role,
     complex,
+    setComplex,
+    plazaSlug,
+    href,
     ready,
     authError,
     businesses,
@@ -282,6 +299,7 @@ export function BillingProvider({ children }) {
     cycleDate,
     cycleName,
     activeCycleId,
+    ratePerUnit,
     draftResult,
     historyKey,
     showToast,
@@ -329,10 +347,12 @@ export function BillingProvider({ children }) {
 }
 
 /** Gates private admin pages; public cycle routes skip this. */
-export function AdminGate({ children, showHome }) {
+export function AdminGate({ children, showHome, hideHeader = false }) {
   const {
     session,
     complex,
+    plazaSlug,
+    href,
     ready,
     authError,
     loading,
@@ -370,7 +390,7 @@ export function AdminGate({ children, showHome }) {
   if (loading) {
     return (
       <div className="app">
-        <Header complexName={complex?.name} showSignOut />
+        <Header complexName={complex?.name} plazaSlug={plazaSlug} showSignOut />
         <div className="status-screen">
           <div className="spinner" />
           <p>Loading readings...</p>
@@ -382,7 +402,7 @@ export function AdminGate({ children, showHome }) {
   if (error) {
     return (
       <div className="app">
-        <Header complexName={complex?.name} showSignOut />
+        <Header complexName={complex?.name} plazaSlug={plazaSlug} showSignOut />
         <div className="status-screen">
           <p className="error-text">{error}</p>
           <button className="btn btn-primary" onClick={reload}>Try Again</button>
@@ -393,11 +413,17 @@ export function AdminGate({ children, showHome }) {
 
   return (
     <div className="app">
-      <Header
-        complexName={complex?.name}
-        showSignOut
-        showHome={showHome}
-      />
+      {!hideHeader && (
+        <Header
+          complexName={complex?.name}
+          plazaSlug={plazaSlug}
+          ratePerUnit={Number(complex?.rate_per_unit) > 0 ? Number(complex.rate_per_unit) : undefined}
+          showSignOut
+          showHome={showHome}
+          homeHref={href('/')}
+          settingsHref={href('/settings')}
+        />
+      )}
       {children}
     </div>
   )

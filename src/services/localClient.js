@@ -3,6 +3,8 @@ const listeners = new Set()
 
 const DEMO_EMAIL = 'demo@local.test'
 const DEMO_PASSWORD = 'demo123'
+const SUPER_EMAIL = 'superadmin@local.test'
+const SUPER_PASSWORD = 'demo123'
 
 function emptyDb() {
   return {
@@ -46,7 +48,13 @@ function toSession(user) {
 }
 
 function matches(row, filters) {
-  return filters.every(f => row[f.col] == f.val)
+  return filters.every(f => {
+    if (f.op === 'is') {
+      if (f.val === null) return row[f.col] == null
+      return row[f.col] === f.val
+    }
+    return row[f.col] == f.val
+  })
 }
 
 function applyDefaults(table, row, db) {
@@ -55,6 +63,15 @@ function applyDefaults(table, row, db) {
     return {
       ...row,
       id: row.id || crypto.randomUUID(),
+      slug: row.slug || null,
+      owner_email: row.owner_email ?? null,
+      owner_id: row.owner_id ?? null,
+      bank_name: row.bank_name ?? null,
+      account_name: row.account_name ?? null,
+      account_number: row.account_number ?? null,
+      rate_per_unit: row.rate_per_unit ?? 250,
+      banner_text: row.banner_text ?? null,
+      banner_enabled: row.banner_enabled ?? false,
       created_at: row.created_at || now,
     }
   }
@@ -86,6 +103,8 @@ function applyDefaults(table, row, db) {
       evidence_note: row.evidence_note ?? null,
       evidence_file_id: row.evidence_file_id ?? null,
       misc_note: row.misc_note ?? null,
+      payment_status: row.payment_status || 'awaiting',
+      amount_paid: row.amount_paid ?? null,
       created_at: row.created_at || now,
     }
   }
@@ -131,11 +150,22 @@ function execute(state, mode) {
     }
 
     if (state.op === 'update') {
-      db[state.table] = rows.map(r =>
-        matches(r, state.filters) ? { ...r, ...state.payload } : r
-      )
+      let updated = null
+      db[state.table] = rows.map(r => {
+        if (!matches(r, state.filters)) return r
+        updated = { ...r, ...state.payload }
+        return updated
+      })
       save(db)
-      return { data: null, error: null }
+      if (mode === 'single') {
+        return updated
+          ? { data: updated, error: null }
+          : { data: null, error: { message: 'No rows' } }
+      }
+      if (mode === 'maybeSingle') {
+        return { data: updated ?? null, error: null }
+      }
+      return { data: updated ? [updated] : [], error: null }
     }
 
     if (state.op === 'delete') {
@@ -175,7 +205,11 @@ function from(table) {
       return api
     },
     eq(col, val) {
-      state.filters.push({ col, val })
+      state.filters.push({ col, val, op: 'eq' })
+      return api
+    },
+    is(col, val) {
+      state.filters.push({ col, val, op: 'is' })
       return api
     },
     insert(rows) {
@@ -290,13 +324,32 @@ export async function startLocalDemo() {
     db.users.push(user)
   }
 
+  let superUser = db.users.find(u => u.email === SUPER_EMAIL)
+  if (!superUser) {
+    superUser = {
+      id: crypto.randomUUID(),
+      email: SUPER_EMAIL,
+      password: SUPER_PASSWORD,
+      user_metadata: { role: 'superadmin' },
+    }
+    db.users.push(superUser)
+  }
+
   let complex = db.complexes.find(c => c.owner_id === user.id)
   if (!complex) {
     const now = new Date().toISOString()
     complex = {
       id: crypto.randomUUID(),
       owner_id: user.id,
+      owner_email: DEMO_EMAIL,
+      slug: 'demo-plaza',
       name: 'Demo Plaza',
+      bank_name: null,
+      account_name: null,
+      account_number: null,
+      rate_per_unit: 250,
+      banner_text: null,
+      banner_enabled: false,
       created_at: now,
     }
     db.complexes.push(complex)
@@ -316,9 +369,23 @@ export async function startLocalDemo() {
         updated_at: now,
       })
     }
+  } else if (!complex.slug) {
+    complex.slug = 'demo-plaza'
   }
 
   const session = toSession(user)
+  db.session = session
+  save(db)
+  notify('SIGNED_IN', session)
+  return { user: session.user, session }
+}
+
+export async function startLocalSuperadmin() {
+  createLocalClient()
+  await startLocalDemo()
+  const db = load()
+  const superUser = db.users.find(u => u.email === SUPER_EMAIL)
+  const session = toSession(superUser)
   db.session = session
   save(db)
   notify('SIGNED_IN', session)

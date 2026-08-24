@@ -1,8 +1,8 @@
 'use client'
 
-import BillsTablePage from '../../../components/BillsTablePage'
-import { AdminGate, useBilling } from '../../../components/providers/BillingProvider'
-import { navigate } from '../../../utils/navigation'
+import BillsTablePage from '../../../../components/BillsTablePage'
+import { AdminGate, useBilling } from '../../../../components/providers/BillingProvider'
+import { navigate } from '../../../../utils/navigation'
 
 export default function DraftBillsPage() {
   const b = useBilling()
@@ -13,12 +13,13 @@ export default function DraftBillsPage() {
         mode="draft"
         complexId={b.complex?.id}
         complexName={b.complex?.name}
+        plazaSlug={b.plazaSlug}
         draftResult={b.draftResult}
         draftCycleDate={b.cycleDate}
         draftCycleName={b.cycleName}
         activeCycleId={b.activeCycleId}
         isAdmin
-        onBack={() => navigate('/cycle')}
+        onBack={() => navigate(b.href('/cycle'))}
         onPublish={b.handlePublish}
       />
     </AdminGate>

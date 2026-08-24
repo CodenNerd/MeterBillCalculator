@@ -1,9 +1,14 @@
-export const RATE_PER_UNIT = 250 // ₦ per kWh
+export const RATE_PER_UNIT = 250 // ₦ per kWh (default; prefer complex settings)
 
 export const ALLOCATION_EQUAL = 'equal'
 export const ALLOCATION_PROPORTIONAL = 'proportional'
 
-export function calculateBills(businesses, previous, current, misc = {}, notes = {}) {
+export const PAYMENT_AWAITING = 'awaiting'
+export const PAYMENT_PAID = 'paid'
+export const PAYMENT_UNPAID = 'unpaid'
+
+export function calculateBills(businesses, previous, current, misc = {}, notes = {}, ratePerUnit = RATE_PER_UNIT) {
+  const rate = Number(ratePerUnit) > 0 ? Number(ratePerUnit) : RATE_PER_UNIT
   let totalUnits = 0
   let totalMisc = 0
   let totalAmount = 0
@@ -12,7 +17,7 @@ export function calculateBills(businesses, previous, current, misc = {}, notes =
     const prev = previous[biz.id] ?? 0
     const curr = parseFloat(current[biz.id]) || 0
     const units = Math.max(0, curr - prev)
-    const unitAmount = units * RATE_PER_UNIT
+    const unitAmount = units * rate
     const miscBill = Math.max(0, parseFloat(misc[biz.id]) || 0)
     const amount = unitAmount + miscBill
     const note = notes[biz.id] != null ? String(notes[biz.id]) : ''
@@ -30,6 +35,7 @@ export function calculateBills(businesses, previous, current, misc = {}, notes =
       note,
       unitAmount: +unitAmount.toFixed(2),
       amount: +amount.toFixed(2),
+      ratePerUnit: rate,
     }
   })
 
@@ -38,6 +44,7 @@ export function calculateBills(businesses, previous, current, misc = {}, notes =
     totalUnits: +totalUnits.toFixed(2),
     totalMisc: +totalMisc.toFixed(2),
     totalAmount: +totalAmount.toFixed(2),
+    ratePerUnit: rate,
   }
 }
 
@@ -49,13 +56,6 @@ function round2(n) {
  * Compare the calculated (meter-based) total against the actual bill from
  * the electricity office, and split the difference ("line loss") either
  * evenly or proportional to each business's energy charge.
- *
- * The last row absorbs any kobo remainder so shares sum to the office bill
- * gap (line loss) exactly when added to unit totals.
- *
- * @param {ReturnType<typeof calculateBills>} result
- * @param {number} actualBill - the total figure from the electricity office
- * @param {'equal'|'proportional'} [method]
  */
 export function applyLineLoss(result, actualBill, method = ALLOCATION_EQUAL) {
   const { rows } = result
@@ -85,7 +85,6 @@ export function applyLineLoss(result, actualBill, method = ALLOCATION_EQUAL) {
     return lineLoss / n
   })
 
-  // Round all but the last; last gets the remainder so shares sum to lineLoss
   const roundedShares = rawShares.map((s, i) =>
     i === n - 1 ? 0 : round2(s)
   )
@@ -115,13 +114,17 @@ export function applyLineLoss(result, actualBill, method = ALLOCATION_EQUAL) {
   }
 }
 
-/**
- * Live worksheet result: meter bills, optionally with office-bill reconciliation.
- * @param {string|number} actualBillInput - raw input; empty/invalid skips line loss
- * @param {'equal'|'proportional'} method
- */
-export function computeCycleResult(businesses, previous, current, misc, actualBillInput, method, notes = {}) {
-  const base = calculateBills(businesses, previous, current, misc, notes)
+export function computeCycleResult(
+  businesses,
+  previous,
+  current,
+  misc,
+  actualBillInput,
+  method,
+  notes = {},
+  ratePerUnit = RATE_PER_UNIT,
+) {
+  const base = calculateBills(businesses, previous, current, misc, notes, ratePerUnit)
   const parsed = parseFloat(actualBillInput)
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return base
@@ -130,7 +133,7 @@ export function computeCycleResult(businesses, previous, current, misc, actualBi
 }
 
 export function formatNaira(n) {
-  return '₦' + n.toLocaleString('en-NG', {
+  return '₦' + Number(n || 0).toLocaleString('en-NG', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
@@ -138,6 +141,15 @@ export function formatNaira(n) {
 
 export function formatKwh(n) {
   return `${Number(n).toFixed(2)} kWh`
+}
+
+export function paymentStatusLabel(status, cycleStatus) {
+  if (status === PAYMENT_PAID) {
+    return cycleStatus === 'published' ? 'Paid (cycle still open)' : 'Paid'
+  }
+  if (status === PAYMENT_UNPAID) return "Didn't pay"
+  if (cycleStatus === 'published') return 'Active · Awaiting payment'
+  return 'Awaiting payment'
 }
 
 export function defaultCycleName(dateInput = new Date()) {
@@ -168,4 +180,15 @@ export function hasDraftProgress(current, misc, actualBill, notes = {}) {
   const bill = parseFloat(actualBill)
   const hasBill = Number.isFinite(bill) && bill > 0
   return hasReading || hasMisc || hasNote || hasBill
+}
+
+export function defaultComplexSettings(partial = {}) {
+  return {
+    bank_name: partial.bank_name ?? '',
+    account_name: partial.account_name ?? '',
+    account_number: partial.account_number ?? '',
+    rate_per_unit: Number(partial.rate_per_unit) > 0 ? Number(partial.rate_per_unit) : RATE_PER_UNIT,
+    banner_text: partial.banner_text ?? '',
+    banner_enabled: Boolean(partial.banner_enabled),
+  }
 }

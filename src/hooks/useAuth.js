@@ -15,6 +15,7 @@ export function useAuth() {
     if (!sess) {
       setRole(null)
       setComplex(null)
+      setAuthError(null)
       setReady(true)
       return
     }
@@ -23,14 +24,20 @@ export function useAuth() {
     setRole(userRole)
     setAuthError(null)
     try {
+      if (userRole === 'superadmin') {
+        setComplex(null)
+        return
+      }
       if (userRole !== 'admin') {
-        setAuthError('This account is not an admin account. Sign in with a complex admin login.')
+        setAuthError('This account is not a plaza admin. Sign in with a plaza admin login.')
+        setComplex(null)
         return
       }
       const c = await ensureComplex(user)
       setComplex(c)
     } catch (err) {
       setAuthError(err.message)
+      setComplex(null)
     } finally {
       setReady(true)
     }

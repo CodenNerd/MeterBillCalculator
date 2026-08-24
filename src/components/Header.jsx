@@ -3,6 +3,7 @@
 import { RATE_PER_UNIT } from '../utils/billing'
 import { signOut, isLocalMode } from '../services/auth'
 import { navigate } from '../utils/navigation'
+import { plazaPath } from '../utils/plaza'
 
 function Wordmark({ className = '' }) {
   return (
@@ -12,13 +13,25 @@ function Wordmark({ className = '' }) {
   )
 }
 
-export default function Header({ complexName, showSignOut, showHome }) {
+export default function Header({
+  complexName,
+  plazaSlug,
+  ratePerUnit,
+  showSignOut,
+  showHome,
+  showSettings,
+  homeHref,
+  settingsHref,
+}) {
   const today = new Date().toLocaleDateString('en-NG', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   })
+  const rate = Number(ratePerUnit) > 0 ? Number(ratePerUnit) : RATE_PER_UNIT
+  const home = homeHref || (plazaSlug ? plazaPath(plazaSlug, '/') : '/')
+  const settings = settingsHref || (plazaSlug ? plazaPath(plazaSlug, '/settings') : '/settings')
 
   return (
     <header className="header no-print">
@@ -27,7 +40,7 @@ export default function Header({ complexName, showSignOut, showHome }) {
           <button
             type="button"
             className="logo-btn"
-            onClick={() => navigate('/')}
+            onClick={() => navigate(home)}
             title="Home"
           >
             <Wordmark />
@@ -36,10 +49,13 @@ export default function Header({ complexName, showSignOut, showHome }) {
           {isLocalMode() && <span className="meta-label meta-label--local">Local demo</span>}
         </div>
         <div className="header-meta">
-          <span className="meta-rate">₦{RATE_PER_UNIT}/kWh</span>
+          <span className="meta-rate">₦{rate}/kWh</span>
           <span className="date">{today}</span>
           {showHome && (
-            <button className="btn-text" onClick={() => navigate('/')}>Home</button>
+            <button className="btn-text" onClick={() => navigate(home)}>Home</button>
+          )}
+          {(showSettings || showSignOut) && (
+            <button className="btn-text" onClick={() => navigate(settings)}>Settings</button>
           )}
           {showSignOut && (
             <button className="btn btn-sm btn-ghost" onClick={() => signOut()}>Sign out</button>

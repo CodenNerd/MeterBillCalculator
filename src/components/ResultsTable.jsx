@@ -72,7 +72,16 @@ function compareRows(a, b, key, dir, hasLineLoss) {
   return dir === 'asc' ? cmp : -cmp
 }
 
-export default function ResultsTable({ result, onRowClick, interactive }) {
+export default function ResultsTable({
+  result,
+  onRowClick,
+  interactive,
+  showPaymentStatus = false,
+  canMarkPayment = false,
+  onMarkPaid,
+  onMarkUnpaid,
+  onClearPayment,
+}) {
   const hasLineLoss = result.lineLoss !== undefined
   const [sort, setSort] = useState({ key: 'amount', dir: 'desc' })
 
@@ -93,72 +102,82 @@ export default function ResultsTable({ result, onRowClick, interactive }) {
 
   return (
     <section className="card results-card">
-      <div className="results-table">
-        <div className={`table-head ${hasLineLoss ? 'table-head--with-loss' : ''}`}>
-          <HeadCell
-            label="Business"
-            sub="Tenant"
-            sortKey="name"
-            sort={sort}
-            onSort={handleSort}
-          />
-          <HeadCell label="Prev" sub="kWh start" align="right" />
-          <HeadCell label="Current" sub="kWh end" align="right" />
-          <HeadCell
-            label="Units"
-            sub="current − prev (kWh)"
-            align="right"
-            sortKey="units"
-            sort={sort}
-            onSort={handleSort}
-          />
-          <HeadCell
-            label="Misc"
-            sub="₦ optional"
-            align="right"
-            sortKey="misc"
-            sort={sort}
-            onSort={handleSort}
-          />
-          {hasLineLoss && (
-            <HeadCell
-              label="Line loss"
-              sub="share of office − meter gap (₦)"
-              align="right"
-              sortKey="lineLoss"
-              sort={sort}
-              onSort={handleSort}
-            />
-          )}
-          <HeadCell
-            label={hasLineLoss ? 'Final' : 'Amount'}
-            sub={hasLineLoss ? 'energy + misc + share (₦)' : 'energy + misc (₦)'}
-            align="right"
-            sortKey="amount"
-            sort={sort}
-            onSort={handleSort}
+      <div className="results-scroll" tabIndex={0} aria-label="Bills table, scroll horizontally to see all columns">
+        <div className={`results-scroll-inner ${hasLineLoss ? 'results-scroll-inner--with-loss' : ''}`}>
+          <div className="results-table">
+            <div className={`table-head ${hasLineLoss ? 'table-head--with-loss' : ''}`}>
+              <HeadCell
+                label="Business"
+                sub="Tenant"
+                sortKey="name"
+                sort={sort}
+                onSort={handleSort}
+              />
+              <HeadCell label="Prev" sub="kWh start" align="right" />
+              <HeadCell label="Current" sub="kWh end" align="right" />
+              <HeadCell
+                label="Units"
+                sub="current − prev (kWh)"
+                align="right"
+                sortKey="units"
+                sort={sort}
+                onSort={handleSort}
+              />
+              <HeadCell
+                label="Misc"
+                sub="₦ optional"
+                align="right"
+                sortKey="misc"
+                sort={sort}
+                onSort={handleSort}
+              />
+              {hasLineLoss && (
+                <HeadCell
+                  label="Line loss"
+                  sub="share of office − meter gap (₦)"
+                  align="right"
+                  sortKey="lineLoss"
+                  sort={sort}
+                  onSort={handleSort}
+                />
+              )}
+              <HeadCell
+                label={hasLineLoss ? 'Final' : 'Amount'}
+                sub={hasLineLoss ? 'energy + misc + share (₦)' : 'energy + misc (₦)'}
+                align="right"
+                sortKey="amount"
+                sort={sort}
+                onSort={handleSort}
+              />
+            </div>
+
+            {sortedRows.map((row, index) => (
+              <ResultRow
+                key={row.id}
+                row={row}
+                displayNumber={index + 1}
+                maxUnits={maxUnits}
+                hasLineLoss={hasLineLoss}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                interactive={interactive}
+                showPaymentStatus={showPaymentStatus}
+                canMarkPayment={canMarkPayment}
+                onMarkPaid={onMarkPaid}
+                onMarkUnpaid={onMarkUnpaid}
+                onClearPayment={onClearPayment}
+              />
+            ))}
+          </div>
+
+          <Totals
+            totalUnits={result.totalUnits}
+            totalMisc={result.totalMisc}
+            totalAmount={hasLineLoss ? result.totalFinalAmount : result.totalAmount}
+            lineLoss={hasLineLoss ? result.lineLoss : undefined}
           />
         </div>
-
-        {sortedRows.map((row, index) => (
-          <ResultRow
-            key={row.id}
-            row={row}
-            displayNumber={index + 1}
-            maxUnits={maxUnits}
-            hasLineLoss={hasLineLoss}
-            onClick={onRowClick ? () => onRowClick(row) : undefined}
-            interactive={interactive}
-          />
-        ))}
       </div>
-
-      <Totals
-        totalUnits={result.totalUnits}
-        totalMisc={result.totalMisc}
-        totalAmount={hasLineLoss ? result.totalFinalAmount : result.totalAmount}
-        lineLoss={hasLineLoss ? result.lineLoss : undefined}
-      />
+      <p className="results-scroll-hint no-print">Swipe sideways to see all columns</p>
     </section>
   )
 }

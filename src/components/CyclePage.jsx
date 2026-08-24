@@ -23,6 +23,8 @@ export default function CyclePage({
   cycleDate,
   cycleName,
   activeCycleId,
+  ratePerUnit = RATE_PER_UNIT,
+  href,
   onCurrentChange,
   onMiscChange,
   onNoteChange,
@@ -35,6 +37,8 @@ export default function CyclePage({
   onAddBusiness,
   onClear,
 }) {
+  const go = (path) => navigate(href ? href(path) : path)
+  const rate = Number(ratePerUnit) > 0 ? Number(ratePerUnit) : RATE_PER_UNIT
   const result = useMemo(
     () => computeCycleResult(
       businesses,
@@ -44,8 +48,9 @@ export default function CyclePage({
       actualBill,
       allocationMethod,
       notes,
+      rate,
     ),
-    [businesses, previous, current, misc, notes, actualBill, allocationMethod],
+    [businesses, previous, current, misc, notes, actualBill, allocationMethod, rate],
   )
 
   const hasLineLoss = result.lineLoss !== undefined
@@ -75,15 +80,13 @@ export default function CyclePage({
   }, [result, hasLineLoss])
 
   function goToBills() {
-    // Always show the live worksheet result; Publish on the bills page
-    // creates or updates the active published cycle.
-    navigate('/cycles/draft')
+    go('/cycles/draft')
   }
 
   return (
     <main className="main main--cycle">
       <header className="cycle-page-head">
-        <button type="button" className="btn-text" onClick={() => navigate('/')}>
+        <button type="button" className="btn-text" onClick={() => go('/')}>
           ← Home
         </button>
         <div className="cycle-page-titles">
@@ -91,7 +94,7 @@ export default function CyclePage({
             {activeCycleId ? 'Edit published cycle' : 'Billing cycle'}
           </h1>
           <p className="page-lede">
-            Set the cycle date and name, enter the office bill, then update each meter reading (kWh).
+            Set the cycle date and name, enter the NEPA office bill, then update each meter reading (kWh).
             Publish from the bills page when ready.
           </p>
         </div>
@@ -125,7 +128,7 @@ export default function CyclePage({
         <div className="general-bill-layout">
           <div className="general-bill-controls">
             <div className="input-wrap">
-              <label htmlFor="actual-bill">Office bill (₦)</label>
+              <label htmlFor="actual-bill">NEPA office bill (₦)</label>
               <input
                 id="actual-bill"
                 type="number"
@@ -170,7 +173,7 @@ export default function CyclePage({
               <span className="gstat-value mono">{formatNaira(meterTotal)}</span>
             </div>
             <div className="gstat">
-              <span className="gstat-label">Office bill (₦)</span>
+              <span className="gstat-label">NEPA office bill (₦)</span>
               <span className="gstat-value mono">
                 {hasLineLoss ? formatNaira(result.actualBill) : '—'}
               </span>
@@ -204,7 +207,7 @@ export default function CyclePage({
             const live = row
               ? {
                   usedLabel: formatKwh(row.units),
-                  energyLabel: `${formatNaira(row.unitAmount)} (${row.units.toFixed(2)} × ₦${RATE_PER_UNIT})`,
+                  energyLabel: `${formatNaira(row.unitAmount)} (${row.units.toFixed(2)} × ₦${rate})`,
                   shareLabel: hasLineLoss
                     ? `${row.lineLossShare >= 0 ? '+' : '−'}${formatNaira(Math.abs(row.lineLossShare))}`
                     : null,
@@ -244,7 +247,7 @@ export default function CyclePage({
       <div className="cycle-sticky-bar no-print">
         <div className="cycle-sticky-inner">
           {!canViewBills && businesses.length > 0 && (
-            <p className="cycle-sticky-hint">Enter the office bill (₦) to view the bills table.</p>
+            <p className="cycle-sticky-hint">Enter the NEPA office bill (₦) to view the bills table.</p>
           )}
           {businesses.length === 0 && (
             <p className="cycle-sticky-hint">Add at least one business to continue.</p>

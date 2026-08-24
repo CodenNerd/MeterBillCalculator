@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import ResultsTable from './ResultsTable'
 import ConcludeDialog from './ConcludeDialog'
+import MarkPaymentDialog from './MarkPaymentDialog'
 import Toast from './Toast'
 import { Wordmark } from './Header'
 import {
   fetchCycleById,
   fetchCycleDetail,
   fetchPublicCycle,
+  fetchPublicCycleForPlaza,
+  markBillPayment,
 } from '../services/supabase'
 import { putEvidence, evidenceKey } from '../services/evidenceStore'
 import {
@@ -16,6 +19,9 @@ import {
   ALLOCATION_PROPORTIONAL,
   formatKwh,
   formatNaira,
+  PAYMENT_AWAITING,
+  PAYMENT_PAID,
+  PAYMENT_UNPAID,
 } from '../utils/billing'
 import {
   buildCycleTablePayload,
@@ -27,6 +33,9 @@ import {
   shareOrCopyLink,
 } from '../utils/share'
 import { navigate } from '../utils/navigation'
+import { plazaPath } from '../utils/plaza'
+
+const SHOW_PAYMENT_KEY = 'mc_show_payment_status'
 
 function cycleDateLabel(isoOrLabel) {
   if (!isoOrLabel) {
@@ -81,12 +90,14 @@ export default function BillsTablePage({
   cycleId,
   complexId,
   complexName,
+  plazaSlug,
   draftResult,
   draftCycleDate,
   draftCycleName,
   encoded,
   activeCycleId = null,
   isAdmin = false,
+  preview = false,
   onBack,
   onPublish,
   onConclude,
@@ -100,6 +111,72 @@ export default function BillsTablePage({
   const [showConclude, setShowConclude] = useState(false)
   const [drawerRow, setDrawerRow] = useState(null)
   const [shareHint, setShareHint] = useState(null)
+  const [markTarget, setMarkTarget] = useState(null)
+  const [showPaymentStatus, setShowPaymentStatus] = useState(false)
+
+  useEffect(() => {
+    try {
+      const fromUrl = typeof window !== 'undefined'
+        && new URLSearchParams(window.location.search).get('status') === '1'
+      if (fromUrl) {
+        setShowPaymentStatus(true)
+        localStorage.setItem(SHOW_PAYMENT_KEY, '1')
+        return
+      }
+      setShowPaymentStatus(localStorage.getItem(SHOW_PAYMENT_KEY) === '1')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  function shareOpts(extra = {}) {
+    return { withStatus: showPaymentStatus, ...extra }
+  }
+
+  function sharePath(cycleIdForPath, extra = {}) {
+    const absolute = buildCycleShareUrl(cycleIdForPath, plazaSlug, shareOpts(extra))
+    try {
+      const u = new URL(absolute)
+      return u.pathname + u.search
+    } catch {
+      return absolute
+    }
+  }
+
+  function syncStatusInUrl(next) {
+    if (typeof window === 'undefined') return
+    if (mode === 'draft' || mode === 'public') return
+    const id = cycleId || saved?.cycle?.id
+    if (!id) return
+    try {
+      const url = new URL(window.location.href)
+      if (next) url.searchParams.set('status', '1')
+      else url.searchParams.delete('status')
+      const nextPath = url.pathname + (url.searchParams.toString() ? `?${url.searchParams}` : '')
+      window.history.replaceState(null, '', nextPath)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function setPaymentStatusVisible(next) {
+    setShowPaymentStatus(next)
+    try {
+      localStorage.setItem(SHOW_PAYMENT_KEY, next ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+    syncStatusInUrl(next)
+  }
+
+  const viewMode = (
+    mode === 'public'
+    || mode === 'public-cycle'
+    || (isAdmin && mode === 'saved' && preview)
+  ) ? 'client' : 'admin'
+
+  const isClientView = viewMode === 'client'
+  const isAdminPreview = isAdmin && mode === 'saved' && preview
 
   const publicPayload = useMemo(() => {
     if (mode !== 'public' || !encoded) return null
@@ -118,7 +195,9 @@ export default function BillsTablePage({
     setError(null)
 
     const loadCycle = mode === 'public-cycle'
-      ? fetchPublicCycle(cycleId)
+      ? (plazaSlug
+          ? fetchPublicCycleForPlaza(cycleId, plazaSlug).then(p => p?.cycle || null)
+          : fetchPublicCycle(cycleId))
       : fetchCycleById(cycleId, complexId)
 
     Promise.all([loadCycle, fetchCycleDetail(cycleId)])
@@ -138,7 +217,7 @@ export default function BillsTablePage({
         if (!cancelled) setLoading(false)
       })
     return () => { cancelled = true }
-  }, [mode, cycleId, complexId])
+  }, [mode, cycleId, complexId, plazaSlug])
 
   const result = useMemo(() => {
     if (mode === 'draft') return draftResult
@@ -168,9 +247,11 @@ export default function BillsTablePage({
   const cycleStatus = saved?.cycle?.status || (mode === 'draft' ? 'draft' : null)
   const isPublished = cycleStatus === 'published'
   const isConcluded = cycleStatus === 'concluded' || (saved?.cycle && !saved.cycle.status)
-  const canManage = isAdmin && (mode === 'draft' || mode === 'saved')
+  const canManage = isAdmin && !isClientView && (mode === 'draft' || mode === 'saved')
   const canPublish = canManage && (mode === 'draft' || isPublished)
   const canConclude = canManage && mode === 'saved' && isPublished
+  const canMarkPayment = canManage && mode === 'saved' && (isPublished || isConcluded)
+  const canPreviewShared = isAdmin && mode === 'saved' && !isClientView && (isPublished || isConcluded)
   const publishLabel = isPublished || (mode === 'draft' && activeCycleId)
     ? 'Update published'
     : 'Publish'
@@ -193,24 +274,30 @@ export default function BillsTablePage({
       ? 'Even split'
       : null
 
-  const statusLabel = mode === 'draft'
-    ? (activeCycleId ? 'Editing published' : 'Draft')
-    : isPublished
-      ? 'Published'
-      : isConcluded
-        ? 'Concluded'
-        : mode === 'public' || mode === 'public-cycle'
-          ? 'Shared'
-          : ''
+  const statusLabel = isAdminPreview
+    ? 'Shared preview'
+    : mode === 'draft'
+      ? (activeCycleId ? 'Editing published' : 'Draft')
+      : isPublished
+        ? 'Published'
+        : isConcluded
+          ? 'Concluded'
+          : mode === 'public' || mode === 'public-cycle'
+            ? 'Shared'
+            : ''
+
+  function cycleHref(path) {
+    return plazaSlug ? plazaPath(plazaSlug, path) : path
+  }
 
   useEffect(() => {
     const id = cycleId || saved?.cycle?.id
     if ((isPublished || isConcluded) && id) {
-      setShareHint(buildCycleShareUrl(id))
+      setShareHint(buildCycleShareUrl(id, plazaSlug, shareOpts()))
     } else if (mode === 'draft') {
       setShareHint(null)
     }
-  }, [isPublished, isConcluded, cycleId, saved?.cycle?.id, mode])
+  }, [isPublished, isConcluded, cycleId, saved?.cycle?.id, mode, plazaSlug, showPaymentStatus])
 
   function showToast(msg) {
     setToast(msg)
@@ -222,7 +309,7 @@ export default function BillsTablePage({
   function resolveShareUrl() {
     const stableId = mode === 'draft' ? null : (cycleId || saved?.cycle?.id)
     if (stableId && mode !== 'public') {
-      return buildCycleShareUrl(stableId)
+      return buildCycleShareUrl(stableId, plazaSlug, shareOpts())
     }
     if (!result) return null
     const payload = mode === 'public' && publicPayload
@@ -232,7 +319,8 @@ export default function BillsTablePage({
           complexName: complexName || publicPayload?.complexName,
           ratePerUnit: RATE_PER_UNIT,
         })
-    return buildShareUrl(payload, 'bills')
+    const url = buildShareUrl(payload, 'bills')
+    return showPaymentStatus ? `${url}${url.includes('?') ? '&' : '?'}status=1` : url
   }
 
   async function handleShare() {
@@ -256,7 +344,7 @@ export default function BillsTablePage({
     try {
       const cycle = await onPublish(result)
       if (cycle?.id) {
-        setShareHint(buildCycleShareUrl(cycle.id))
+        setShareHint(buildCycleShareUrl(cycle.id, plazaSlug, shareOpts()))
       }
     } catch {
       showToast('Publish failed. Please try again.')
@@ -275,24 +363,120 @@ export default function BillsTablePage({
         fileId = evidenceKey(complexId, cycleId, row.id)
         await putEvidence(fileId, entry.file)
       }
+      const status = entry.paymentStatus || PAYMENT_UNPAID
       evidenceMap[row.id] = {
         note: entry.note || '',
         fileId,
+        paymentStatus: status,
+        amountPaid: status === PAYMENT_PAID
+          ? (row.amountPaid != null ? row.amountPaid : (row.finalAmount ?? row.amount))
+          : status === PAYMENT_UNPAID ? 0 : null,
       }
     }
-    await onConclude(result, evidenceMap)
-    setShowConclude(false)
+    try {
+      await onConclude(result, evidenceMap)
+      setShowConclude(false)
+    } catch (err) {
+      showToast(err?.message || 'Conclude failed')
+    }
+  }
+
+  async function applyMarkPayment({ status, amountPaid, note, file }) {
+    if (!cycleId || !complexId || !markTarget) return
+    let fileId = null
+    if (file) {
+      fileId = evidenceKey(complexId, cycleId, markTarget.id)
+      await putEvidence(fileId, file)
+    }
+    const updated = await markBillPayment({
+      cycleId,
+      businessId: markTarget.id,
+      status,
+      amountPaid,
+      note: note || '',
+      ...(fileId ? { fileId } : {}),
+    })
+    setSaved(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        rows: prev.rows.map(r =>
+          String(r.business_id) === String(markTarget.id)
+            ? {
+                ...r,
+                payment_status: updated.payment_status,
+                amount_paid: updated.amount_paid,
+                evidence_note: updated.evidence_note,
+                evidence_file_id: updated.evidence_file_id,
+              }
+            : r,
+        ),
+      }
+    })
+    setMarkTarget(null)
+    showToast('Payment updated')
+  }
+
+  async function handleClearPayment(row) {
+    if (!cycleId) return
+    try {
+      const updated = await markBillPayment({
+        cycleId,
+        businessId: row.id,
+        status: PAYMENT_AWAITING,
+      })
+      setSaved(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          rows: prev.rows.map(r =>
+            String(r.business_id) === String(row.id)
+              ? {
+                  ...r,
+                  payment_status: updated.payment_status,
+                  amount_paid: updated.amount_paid,
+                  evidence_note: updated.evidence_note,
+                  evidence_file_id: updated.evidence_file_id,
+                }
+              : r,
+          ),
+        }
+      })
+      showToast('Payment cleared')
+    } catch {
+      showToast('Could not clear payment')
+    }
   }
 
   function handleRowClick(row) {
-    if (isAdmin && mode !== 'public' && mode !== 'public-cycle') {
-      navigate(`/businesses/${row.id}`)
+    if (row?.id == null) {
+      setDrawerRow(row)
       return
     }
-    setDrawerRow(row)
+    // Legacy encoded /bills snapshots may lack stable business ids.
+    if (mode === 'public' && publicPayload) {
+      setDrawerRow(row)
+      return
+    }
+    const fromId = cycleId || saved?.cycle?.id
+    const fromPath = fromId ? sharePath(fromId) : ''
+    const from = fromPath ? `?from=${encodeURIComponent(fromPath)}` : ''
+    navigate(`${cycleHref(`/businesses/${row.id}`)}${from}`)
   }
 
-  const isPublicShell = mode === 'public' || mode === 'public-cycle'
+  function enterPreview() {
+    const id = cycleId || saved?.cycle?.id
+    if (!id) return
+    navigate(sharePath(id, { preview: true }))
+  }
+
+  function exitPreview() {
+    const id = cycleId || saved?.cycle?.id
+    if (!id) return
+    navigate(sharePath(id))
+  }
+
+  const showClientChrome = isClientView
 
   if (mode === 'public' && !publicPayload) {
     return (
@@ -309,7 +493,7 @@ export default function BillsTablePage({
       <div className="app">
         <div className="status-screen">
           <p className="error-text">No draft cycle to show.</p>
-          <button className="btn btn-primary" onClick={() => navigate('/cycle')}>
+          <button className="btn btn-primary" onClick={() => navigate(cycleHref('/cycle'))}>
             Back to worksheet
           </button>
         </div>
@@ -318,15 +502,24 @@ export default function BillsTablePage({
   }
 
   return (
-    <div className={isPublicShell ? 'app' : undefined}>
-      {isPublicShell && (
+    <div className={showClientChrome ? 'app' : undefined}>
+      {isAdminPreview && (
+        <div className="preview-banner no-print">
+          <span>Preview: client shared view</span>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={exitPreview}>
+            Exit preview
+          </button>
+        </div>
+      )}
+
+      {showClientChrome && (
         <header className="header no-print">
           <div className="header-inner">
             <div className="logo">
               <Wordmark />
-              {(complexName || publicPayload?.complexName) && (
+              {(complexName || publicPayload?.complexName || saved?.cycle?.complex_name) && (
                 <span className="complex-label">
-                  {complexName || publicPayload?.complexName}
+                  {complexName || publicPayload?.complexName || saved?.cycle?.complex_name}
                 </span>
               )}
             </div>
@@ -334,8 +527,8 @@ export default function BillsTablePage({
         </header>
       )}
 
-      <main className={`main ${isPublicShell ? 'bills-table-public' : ''} ${canManage ? 'main--with-sticky' : ''}`}>
-        {!isPublicShell && (
+      <main className={`main ${showClientChrome ? 'bills-table-public' : ''} ${canManage ? 'main--with-sticky' : ''}`}>
+        {!showClientChrome && (
           <div className="page-nav no-print">
             <button type="button" className="btn-text" onClick={onBack}>
               ← {mode === 'draft' ? 'Back to worksheet' : 'Home'}
@@ -353,29 +546,65 @@ export default function BillsTablePage({
                 {splitCaption ? ` · ${splitCaption}` : ''}
               </p>
             </div>
-            <div className="result-actions no-print">
-              {canManage && isPublished && onEditWorksheet && (
-                <button className="btn btn-sm btn-ghost" onClick={onEditWorksheet}>
-                  Edit worksheet
-                </button>
+            <div className="bills-toolbar no-print">
+              <div className="bills-toolbar-group">
+                <span className="bills-toolbar-label">View</span>
+                <div className="payment-view-toggle" role="group" aria-label="Payment status display">
+                  <button
+                    type="button"
+                    className={`payment-view-tab ${!showPaymentStatus ? 'active' : ''}`}
+                    onClick={() => setPaymentStatusVisible(false)}
+                  >
+                    Amounts
+                  </button>
+                  <button
+                    type="button"
+                    className={`payment-view-tab ${showPaymentStatus ? 'active' : ''}`}
+                    onClick={() => setPaymentStatusVisible(true)}
+                  >
+                    With status
+                  </button>
+                </div>
+              </div>
+
+              {(canPreviewShared || (canManage && isPublished && onEditWorksheet)) && (
+                <div className="bills-toolbar-group">
+                  <span className="bills-toolbar-label">Manage</span>
+                  <div className="bills-toolbar-actions">
+                    {canPreviewShared && (
+                      <button className="btn btn-sm btn-ghost" onClick={enterPreview}>
+                        Preview shared view
+                      </button>
+                    )}
+                    {canManage && isPublished && onEditWorksheet && (
+                      <button className="btn btn-sm btn-ghost" onClick={onEditWorksheet}>
+                        Edit worksheet
+                      </button>
+                    )}
+                  </div>
+                </div>
               )}
+
               {canShare && (
-                <>
-                  <button className="btn btn-sm btn-ghost" onClick={() => window.print()}>
-                    Print
-                  </button>
-                  <button className="btn btn-sm btn-ghost" onClick={handleShare}>
-                    Share
-                  </button>
-                  <button className="btn btn-sm btn-primary" onClick={handleWhatsAppShare}>
-                    WhatsApp
-                  </button>
-                </>
+                <div className="bills-toolbar-group">
+                  <span className="bills-toolbar-label">Share</span>
+                  <div className="bills-toolbar-actions">
+                    <button className="btn btn-sm btn-ghost" onClick={() => window.print()}>
+                      Print
+                    </button>
+                    <button className="btn btn-sm btn-ghost" onClick={handleShare}>
+                      Share
+                    </button>
+                    <button className="btn btn-sm btn-primary" onClick={handleWhatsAppShare}>
+                      WhatsApp
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
 
-          {canShare && shareHint && (
+          {canShare && shareHint && !isClientView && (
             <div className="share-hint no-print">
               <span className="share-hint-label">Stable link</span>
               <code className="share-hint-url">{shareHint}</code>
@@ -403,7 +632,7 @@ export default function BillsTablePage({
                 <div className="figure-value">{formatNaira(result.calculatedUnitTotal)}</div>
               </div>
               <div className="figure">
-                <div className="figure-label">Office bill</div>
+                <div className="figure-label">NEPA office bill</div>
                 <div className="figure-value">{formatNaira(result.actualBill)}</div>
               </div>
               <div className="figure">
@@ -425,6 +654,11 @@ export default function BillsTablePage({
             result={result}
             onRowClick={handleRowClick}
             interactive
+            showPaymentStatus={showPaymentStatus}
+            canMarkPayment={canMarkPayment}
+            onMarkPaid={row => setMarkTarget({ row, mode: 'paid' })}
+            onMarkUnpaid={row => setMarkTarget({ row, mode: 'unpaid' })}
+            onClearPayment={handleClearPayment}
           />
         )}
       </main>
@@ -436,7 +670,7 @@ export default function BillsTablePage({
               {isConcluded
                 ? 'This cycle is locked.'
                 : isPublished || (mode === 'draft' && activeCycleId)
-                  ? 'Update the published table, or open the cycle to conclude when payments are done.'
+                  ? 'Update the published table, or conclude when payments are done.'
                   : 'Publish to get a stable share link. Conclude later to lock readings.'}
             </p>
             <div className="cycle-sticky-actions">
@@ -468,8 +702,27 @@ export default function BillsTablePage({
       {showConclude && result && (
         <ConcludeDialog
           rows={result.rows}
+          initialStatuses={Object.fromEntries(
+            result.rows.map(r => [r.id, r.paymentStatus || PAYMENT_AWAITING]),
+          )}
           onConfirm={handleConcludeConfirm}
           onCancel={() => setShowConclude(false)}
+        />
+      )}
+
+      {markTarget && (
+        <MarkPaymentDialog
+          row={markTarget.row}
+          mode={markTarget.mode}
+          onConfirm={async (payload) => {
+            try {
+              await applyMarkPayment(payload)
+            } catch {
+              showToast('Could not update payment')
+              throw new Error('Could not update payment')
+            }
+          }}
+          onCancel={() => setMarkTarget(null)}
         />
       )}
 

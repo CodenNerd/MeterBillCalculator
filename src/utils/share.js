@@ -68,6 +68,8 @@ export function resultFromSavedCycle(cycle, detailRows) {
     amount: Number(r.unit_amount) + Number(r.misc),
     lineLossShare: Number(r.line_loss_share),
     finalAmount: Number(r.final_amount),
+    paymentStatus: r.payment_status || 'awaiting',
+    amountPaid: r.amount_paid == null ? null : Number(r.amount_paid),
   }))
 
   const totalUnits = rows.reduce((s, r) => s + r.units, 0)
@@ -104,8 +106,15 @@ export function buildShareUrl(payload, route = 'bills') {
 }
 
 /** Stable share link for a published/concluded cycle (path-based for OG). */
-export function buildCycleShareUrl(cycleId) {
-  return `${originBase()}/cycles/${cycleId}`
+export function buildCycleShareUrl(cycleId, plazaSlug, opts = {}) {
+  const base = plazaSlug
+    ? `${originBase()}/${plazaSlug}/cycles/${cycleId}`
+    : `${originBase()}/cycles/${cycleId}`
+  const q = new URLSearchParams()
+  if (opts.withStatus) q.set('status', '1')
+  if (opts.preview) q.set('preview', '1')
+  const qs = q.toString()
+  return qs ? `${base}?${qs}` : base
 }
 
 /**
