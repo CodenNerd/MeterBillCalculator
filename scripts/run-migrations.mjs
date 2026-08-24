@@ -3,12 +3,14 @@
  * Prefer: POSTGRES_URL / POSTGRES_URL_NON_POOLING from Vercel ↔ Supabase.
  * Or: POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL) to try pooler hosts.
  *
- * Also runs automatically on Node server start (see src/instrumentation.js).
- * Skip with SKIP_DB_MIGRATE=1.
+ * Runs on Vercel during `next build` (see package.json) and on Node server
+ * start locally (see src/instrumentation.js). Skip with SKIP_DB_MIGRATE=1.
+ *
+ * Look for `[migrate]` lines in the Vercel build log for full status.
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { ensureDatabaseMigrated } from '../src/lib/dbMigrate.mjs'
+import { ensureDatabaseMigrated, MIGRATIONS } from '../src/lib/dbMigrate.mjs'
 
 /** Minimal .env loader (no dotenv dependency). */
 function loadEnvFile(filePath) {
@@ -35,22 +37,56 @@ loadEnvFile('.env.local')
 loadEnvFile('.env')
 
 const force = process.argv.includes('--force')
+const onVercel = Boolean(process.env.VERCEL)
+
+console.log('')
+console.log('[migrate] >>> post-build / CLI migration runner')
+console.log(`[migrate] >>> Vercel=${onVercel} env=${process.env.VERCEL_ENV || 'n/a'} force=${force}`)
+console.log(`[migrate] >>> Known migrations: ${MIGRATIONS.map((m) => m.id).join(', ')}`)
+console.log('')
 
 try {
   const result = await ensureDatabaseMigrated({ force })
+
   if (result.status === 'skipped') {
-    console.error(
-      result.reason === 'no-credentials'
-        ? 'No Postgres URL/password. Set POSTGRES_URL or POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL).'
-        : `Skipped: ${result.reason}`,
-    )
-    if (result.reason === 'no-credentials') process.exit(1)
-  } else if (result.status === 'already-applied') {
-    console.log(`Already applied: ${result.id} (pass --force to re-run)`)
-  } else if (result.status === 'applied') {
-    console.log(`Applied: ${result.id}`)
+    if (result.reason === 'no-credentials') {
+      const msg =
+        'No Postgres URL/password. Set POSTGRES_URL or POSTGRES_PASSWORD (+ NEXT_PUBLIC_SUPABASE_URL).'
+      if (onVercel) {
+        console.error(`[migrate] FATAL: ${msg} Required on Vercel for schema deploy.`)
+        process.exit(1)
+      }
+      console.warn(`[migrate] ${msg} Skipping (local).`)
+      process.exit(0)
+    }
+    console.log(`[migrate] Runner finished: skipped (${result.reason})`)
+    process.exit(0)
   }
+
+  if (result.failed?.length) {
+    console.error('[migrate] Runner finished: FAILED')
+    for (const f of result.failed) {
+      console.error(`[migrate]   - ${f.id}: ${f.error}`)
+    }
+    process.exit(1)
+  }
+
+  console.log('[migrate] Runner finished: OK')
+  if (result.applied?.length) {
+    console.log(
+      `[migrate]   Applied: ${result.applied.map((a) => `${a.id} (${a.ms}ms)`).join(', ')}`,
+    )
+  }
+  if (result.skipped?.length) {
+    console.log(
+      `[migrate]   Skipped: ${result.skipped.map((s) => `${s.id} (${s.reason})`).join(', ')}`,
+    )
+  }
+  if (result.host) console.log(`[migrate]   Host: ${result.host}`)
+  if (result.elapsedMs != null) console.log(`[migrate]   Elapsed: ${result.elapsedMs}ms`)
+  console.log('')
 } catch (err) {
-  console.error('Migration failed:', err.message || err)
+  console.error('[migrate] Runner finished: ERROR')
+  console.error('[migrate]', err?.stack || err?.message || err)
   process.exit(1)
 }
