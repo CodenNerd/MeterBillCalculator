@@ -16,6 +16,8 @@ import {
   concludeCycle,
   fetchCycleById,
   fetchCycleDetail,
+  fetchPublishedCycles,
+  seedPreviousFromCycle,
 } from '../../services/supabase'
 import { navigate } from '../../utils/navigation'
 import { plazaPath } from '../../utils/plaza'
@@ -63,6 +65,9 @@ export function BillingProvider({ children }) {
   const [cycleDate, setCycleDate] = useStorage('mc_cycle_date', toDateInputValue())
   const [cycleName, setCycleName] = useStorage('mc_cycle_name', defaultCycleName())
   const [activeCycleId, setActiveCycleId, clearActiveCycleId] = useStorage('mc_active_cycle_id', null)
+  // When editing a published cycle, bill snapshots supply previous readings
+  // (businesses.previous_reading may already be rolled forward for a newer draft).
+  const [previousOverride, setPreviousOverride, clearPreviousOverride] = useStorage('mc_previous_override', null)
 
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(null)
@@ -88,12 +93,33 @@ export function BillingProvider({ children }) {
   }, [activeCycleId, complex?.id, ready])
 
   const bizList = businesses.map(b => ({ id: b.id, name: b.name }))
-  const previous = Object.fromEntries(businesses.map(b => [b.id, b.previous_reading]))
+  const previousFromBusinesses = Object.fromEntries(
+    businesses.map(b => [b.id, b.previous_reading]),
+  )
+  const previous = previousOverride && typeof previousOverride === 'object'
+    ? {
+        ...previousFromBusinesses,
+        ...Object.fromEntries(
+          Object.entries(previousOverride).map(([id, value]) => [id, value]),
+        ),
+      }
+    : previousFromBusinesses
+
+  // Normalize lookups so numeric / string business ids both resolve.
+  function previousFor(id) {
+    if (previous[id] != null) return Number(previous[id]) || 0
+    if (previous[String(id)] != null) return Number(previous[String(id)]) || 0
+    return 0
+  }
+
+  const previousMap = Object.fromEntries(
+    businesses.map(b => [b.id, previousFor(b.id)]),
+  )
 
   const draftResult = useMemo(
     () => computeCycleResult(
       businesses.map(b => ({ id: b.id, name: b.name })),
-      Object.fromEntries(businesses.map(b => [b.id, b.previous_reading])),
+      previousMap,
       current,
       misc,
       actualBill,
@@ -101,7 +127,7 @@ export function BillingProvider({ children }) {
       notes,
       ratePerUnit,
     ),
-    [businesses, current, misc, notes, actualBill, allocationMethod, ratePerUnit],
+    [businesses, previousMap, current, misc, notes, actualBill, allocationMethod, ratePerUnit],
   )
 
   function showToast(msg) {
@@ -168,6 +194,41 @@ export function BillingProvider({ children }) {
     setCycleDate(toDateInputValue())
     setCycleName(defaultCycleName())
     setActiveCycleId(null)
+    clearPreviousOverride()
+  }
+
+  /**
+   * Home CTA: blank worksheet. If a published cycle exists, roll meter
+   * previous readings forward from that cycle's current readings.
+   */
+  async function startFreshCycle() {
+    clearDraft()
+    if (complex?.id) {
+      try {
+        const published = await fetchPublishedCycles(complex.id)
+        const latest = published?.[0]
+        if (latest?.id) {
+          const rows = await fetchCycleDetail(latest.id)
+          const seeded = Object.fromEntries(
+            (rows || [])
+              .filter(r => r.business_id != null)
+              .map(r => [String(r.business_id), Number(r.current_reading) || 0]),
+          )
+          if (Object.keys(seeded).length) {
+            setPreviousOverride(seeded)
+          }
+          try {
+            await seedPreviousFromCycle(latest.id)
+            await reload()
+          } catch {
+            // Keep worksheet override even if persisting previous_reading fails.
+          }
+        }
+      } catch {
+        showToast('Could not load last published readings')
+      }
+    }
+    navigate(href('/cycle'))
   }
 
   function handleClear() {
@@ -201,14 +262,21 @@ export function BillingProvider({ children }) {
     const nextCurrent = {}
     const nextMisc = {}
     const nextNotes = {}
+    const nextPrevious = {}
     for (const r of rows) {
       nextCurrent[r.business_id] = String(r.current_reading)
       nextMisc[r.business_id] = r.misc ? String(r.misc) : ''
       nextNotes[r.business_id] = r.misc_note || ''
+      nextPrevious[r.business_id] = Number(r.previous_reading) || 0
     }
     setCurrent(nextCurrent)
     setMisc(nextMisc)
     setNotes(nextNotes)
+    setPreviousOverride(
+      Object.fromEntries(
+        Object.entries(nextPrevious).map(([id, value]) => [String(id), value]),
+      ),
+    )
     setActualBill(String(cycle.actual_bill))
     setAllocationMethod(cycle.allocation_method || ALLOCATION_EQUAL)
     setCycleDate(toDateInputValue(cycle.cycle_date))
@@ -256,9 +324,7 @@ export function BillingProvider({ children }) {
     }
 
     const cycle = await publishCycle(summary, result.rows, complex.id, existingId)
-    setActiveCycleId(cycle.id)
-    setCycleName(cycle.name || nameValue)
-    setCycleDate(toDateInputValue(cycle.cycle_date || dateValue))
+    clearDraft()
     setHistoryKey(k => k + 1)
     showToast(existingId ? 'Published cycle updated' : 'Cycle published')
     navigate(href(`/cycles/${cycle.id}`))
@@ -316,7 +382,7 @@ export function BillingProvider({ children }) {
     error,
     reload,
     bizList,
-    previous,
+    previous: previousMap,
     current,
     misc,
     notes,
@@ -345,6 +411,7 @@ export function BillingProvider({ children }) {
     handleConclude,
     hydrateFromCycle,
     handleContinuePublished,
+    startFreshCycle,
     fetchCycleById,
     toDateInputValue,
   }

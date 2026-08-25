@@ -2,21 +2,19 @@
 
 import { useEffect } from 'react'
 import Home from '../../components/Home'
+import Breadcrumbs from '../../components/Breadcrumbs'
 import { AdminGate, useBilling } from '../../components/providers/BillingProvider'
 import { navigate } from '../../utils/navigation'
+import { buildPlazaCrumbs } from '../../utils/breadcrumbs'
 
 export default function PlazaHomePage() {
   const {
     complex,
     plazaSlug,
-    href,
-    current,
-    misc,
-    notes,
-    actualBill,
-    activeCycleId,
     historyKey,
-    handleContinuePublished,
+    role,
+    href,
+    startFreshCycle,
   } = useBilling()
 
   useEffect(() => {
@@ -25,6 +23,19 @@ export default function PlazaHomePage() {
     }
   }, [complex?.slug, plazaSlug])
 
+  const breadcrumbs = role === 'superadmin'
+    ? (
+      <Breadcrumbs
+        items={buildPlazaCrumbs({
+          role,
+          plazaSlug,
+          plazaName: complex?.name,
+          trail: [],
+        })}
+      />
+      )
+    : null
+
   return (
     <AdminGate showHome={false}>
       <Home
@@ -32,15 +43,11 @@ export default function PlazaHomePage() {
         complexName={complex?.name}
         plazaSlug={plazaSlug}
         href={href}
-        current={current}
-        misc={misc}
-        notes={notes}
-        actualBill={actualBill}
-        activeCycleId={activeCycleId}
         onRefreshKey={historyKey}
-        onContinuePublished={handleContinuePublished}
+        onStartCycle={startFreshCycle}
         bannerEnabled={complex?.banner_enabled}
         bannerText={complex?.banner_text}
+        breadcrumbs={breadcrumbs}
       />
     </AdminGate>
   )

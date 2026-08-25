@@ -22,6 +22,9 @@ export default function CycleWorksheetPage() {
         activeCycleId={b.activeCycleId}
         ratePerUnit={b.ratePerUnit}
         href={b.href}
+        plazaSlug={b.plazaSlug}
+        plazaName={b.complex?.name}
+        role={b.role}
         onCurrentChange={b.handleCurrentChange}
         onMiscChange={b.handleMiscChange}
         onNoteChange={b.handleNoteChange}

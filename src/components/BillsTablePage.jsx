@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import ResultsTable from './ResultsTable'
 import ConcludeDialog from './ConcludeDialog'
 import MarkPaymentDialog from './MarkPaymentDialog'
 import Toast from './Toast'
+import Breadcrumbs from './Breadcrumbs'
 import { Wordmark } from './Header'
 import {
   fetchCycleById,
@@ -36,6 +38,7 @@ import {
 } from '../utils/share'
 import { navigate } from '../utils/navigation'
 import { plazaPath } from '../utils/plaza'
+import { buildPlazaCrumbs } from '../utils/breadcrumbs'
 
 const SHOW_PAYMENT_KEY = 'mc_show_payment_status'
 
@@ -104,6 +107,7 @@ export default function BillsTablePage({
   onPublish,
   onConclude,
   onEditWorksheet,
+  role,
 }) {
   const [saved, setSaved] = useState(null)
   const [error, setError] = useState(null)
@@ -558,10 +562,26 @@ export default function BillsTablePage({
 
       <main className={`main ${showClientChrome ? 'bills-table-public' : ''} ${canManage ? 'main--with-sticky' : ''}`}>
         {!showClientChrome && (
-          <div className="page-nav no-print">
-            <button type="button" className="btn-text" onClick={onBack}>
-              ← {mode === 'draft' ? 'Back to worksheet' : 'Home'}
-            </button>
+          <div className="page-nav page-nav--row no-print">
+            <Breadcrumbs
+              items={buildPlazaCrumbs({
+                role,
+                plazaSlug,
+                plazaName: complexName,
+                trail: mode === 'draft'
+                  ? [{ label: 'Worksheet', href: cycleHref('/cycle') }, { label: 'Bills' }]
+                  : [{ label: displayName || 'Cycle' }],
+              })}
+            />
+            {(mode === 'saved' || mode === 'public-cycle') && (isPublished || isConcluded) && cycleId && plazaSlug && (
+              <Link
+                href={cycleHref(`/cycles/${cycleId}/invoices`)}
+                className="btn btn-sm btn-ghost"
+                prefetch
+              >
+                View all invoices
+              </Link>
+            )}
           </div>
         )}
 

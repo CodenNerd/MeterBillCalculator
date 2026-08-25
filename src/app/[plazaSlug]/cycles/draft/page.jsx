@@ -19,6 +19,7 @@ export default function DraftBillsPage() {
         draftCycleName={b.cycleName}
         activeCycleId={b.activeCycleId}
         isAdmin
+        role={b.role}
         onBack={() => navigate(b.href('/cycle'))}
         onPublish={b.handlePublish}
       />

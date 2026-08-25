@@ -29,7 +29,18 @@ function PublicBusinessView({ businessId, plazaSlug }) {
 }
 
 function AdminBusinessView({ businessId }) {
-  const { complex, plazaSlug } = useBilling()
+  const { complex, plazaSlug, role } = useBilling()
+
+  if (!complex?.id) {
+    return (
+      <AdminGate showHome>
+        <div className="status-screen">
+          <div className="spinner" />
+          <p>Loading timeline...</p>
+        </div>
+      </AdminGate>
+    )
+  }
 
   return (
     <AdminGate showHome>
@@ -41,8 +52,10 @@ function AdminBusinessView({ businessId }) {
       }>
         <BusinessTimeline
           businessId={businessId}
-          complexId={complex?.id}
+          complexId={complex.id}
           plazaSlug={plazaSlug}
+          plazaName={complex.name}
+          role={role}
         />
       </Suspense>
     </AdminGate>

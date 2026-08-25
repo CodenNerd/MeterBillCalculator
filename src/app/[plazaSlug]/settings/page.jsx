@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Breadcrumbs from '../../../components/Breadcrumbs'
 import { AdminGate, useBilling } from '../../../components/providers/BillingProvider'
 import { fetchComplexSettings, saveComplexSettings } from '../../../services/supabase'
 import { defaultComplexSettings, RATE_PER_UNIT } from '../../../utils/billing'
-import { navigate } from '../../../utils/navigation'
+import { buildPlazaCrumbs } from '../../../utils/breadcrumbs'
 
 export default function SettingsPage() {
-  const { complex, setComplex, showToast, href } = useBilling()
+  const { complex, setComplex, showToast, plazaSlug, role } = useBilling()
   const [form, setForm] = useState(() => defaultComplexSettings())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -48,9 +49,14 @@ export default function SettingsPage() {
     <AdminGate showHome>
       <main className="main">
         <div className="page-nav">
-          <button type="button" className="btn-text" onClick={() => navigate(href('/'))}>
-            ← Home
-          </button>
+          <Breadcrumbs
+            items={buildPlazaCrumbs({
+              role,
+              plazaSlug,
+              plazaName: complex?.name,
+              trail: [{ label: 'Settings' }],
+            })}
+          />
         </div>
 
         <header className="cycle-page-titles">

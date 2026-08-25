@@ -1,10 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import Breadcrumbs from './Breadcrumbs'
+import TenantSwitcher from './TenantSwitcher'
 import {
   fetchBusinessBillTimeline,
   fetchBusinessById,
+  fetchBusinesses,
 } from '../services/supabase'
 import { getEvidenceObjectUrl } from '../services/evidenceStore'
 import {
@@ -15,7 +19,7 @@ import {
   PAYMENT_PAID,
   PAYMENT_UNPAID,
 } from '../utils/billing'
-import { navigate } from '../utils/navigation'
+import { buildPlazaCrumbs } from '../utils/breadcrumbs'
 import { plazaPath } from '../utils/plaza'
 
 function statusClass(cycle, bill) {
@@ -36,24 +40,30 @@ export default function BusinessTimeline({
   businessId,
   complexId,
   plazaSlug,
+  plazaName,
+  role,
   isPublic = false,
-  backHref,
-  backLabel,
 }) {
   const searchParams = useSearchParams()
   const fromParam = searchParams.get('from')
   const [business, setBusiness] = useState(null)
+  const [siblings, setSiblings] = useState([])
   const [items, setItems] = useState(null)
   const [error, setError] = useState(null)
   const [thumbs, setThumbs] = useState({})
 
   const path = (p) => (plazaSlug ? plazaPath(plazaSlug, p) : p)
 
-  const resolvedBack = backHref
-    || (fromParam && fromParam.startsWith('/') ? fromParam : null)
-    || (isPublic ? null : path('/'))
-  const resolvedBackLabel = backLabel
-    || (resolvedBack?.includes('/cycles/') ? '← Bills' : isPublic ? '← Bills' : '← Home')
+  const fromQuery = useMemo(() => {
+    if (!fromParam || !fromParam.startsWith('/')) return ''
+    return `?from=${encodeURIComponent(fromParam)}`
+  }, [fromParam])
+
+  const cycleFrom = useMemo(() => {
+    if (!fromParam || !fromParam.startsWith('/')) return null
+    const match = fromParam.match(/\/cycles\/([^/?#]+)/)
+    return match ? match[1] : null
+  }, [fromParam])
 
   useEffect(() => {
     let cancelled = false
@@ -72,6 +82,13 @@ export default function BusinessTimeline({
         setBusiness(biz)
         const visible = (timeline || []).filter(({ cycle }) => isPublicCycle(cycle))
         setItems(visible)
+
+        try {
+          const list = await fetchBusinesses(biz.complex_id)
+          if (!cancelled) setSiblings(list || [])
+        } catch {
+          if (!cancelled) setSiblings([])
+        }
 
         const urls = {}
         for (const { bill } of visible) {
@@ -95,21 +112,30 @@ export default function BusinessTimeline({
     }
   }, [businessId, complexId])
 
-  function timelineFromQuery() {
-    if (!fromParam || !fromParam.startsWith('/')) return ''
-    return `?from=${encodeURIComponent(fromParam)}`
-  }
+  const tenants = useMemo(() => (
+    (siblings || []).map(b => ({
+      id: b.id,
+      name: b.name,
+      href: `${path(`/businesses/${b.id}`)}${fromQuery}`,
+    }))
+  ), [siblings, plazaSlug, fromQuery])
+
+  const crumbs = buildPlazaCrumbs({
+    role: isPublic ? undefined : role,
+    plazaSlug,
+    plazaName,
+    trail: [
+      ...(cycleFrom
+        ? [{ label: 'Cycle', href: path(`/cycles/${cycleFrom}`) }]
+        : []),
+      { label: business?.name || 'Tenant' },
+    ],
+  })
 
   return (
     <main className="main">
       <div className="page-nav">
-        {resolvedBack ? (
-          <button type="button" className="btn-text" onClick={() => navigate(resolvedBack)}>
-            {resolvedBackLabel}
-          </button>
-        ) : (
-          <span className="muted" style={{ fontSize: '0.875rem' }}>Tenant bill history</span>
-        )}
+        <Breadcrumbs items={crumbs} />
       </div>
 
       {error && <p className="error-text">{error}</p>}
@@ -130,6 +156,12 @@ export default function BusinessTimeline({
             </p>
           </header>
 
+          <TenantSwitcher
+            tenants={tenants}
+            currentId={businessId}
+            ariaLabel="Switch tenant"
+          />
+
           {items && items.length === 0 && (
             <div className="empty-state empty-state--panel">
               No bills recorded for this business yet.
@@ -141,7 +173,6 @@ export default function BusinessTimeline({
               {items.map(({ bill, cycle }) => {
                 const payStatus = bill.payment_status || PAYMENT_AWAITING
                 const label = paymentStatusLabel(payStatus, cycle.status)
-                const fromQ = timelineFromQuery()
                 return (
                   <li key={bill.id} className="timeline-item">
                     <div className="timeline-dot" aria-hidden="true" />
@@ -191,20 +222,20 @@ export default function BusinessTimeline({
                       )}
 
                       <div className="timeline-card-actions">
-                        <button
-                          type="button"
+                        <Link
+                          href={path(`/cycles/${cycle.id}`)}
                           className="btn btn-sm btn-ghost"
-                          onClick={() => navigate(path(`/cycles/${cycle.id}`))}
+                          prefetch
                         >
                           View cycle overview
-                        </button>
-                        <button
-                          type="button"
+                        </Link>
+                        <Link
+                          href={`${path(`/businesses/${businessId}/invoices/${cycle.id}`)}${fromQuery}`}
                           className="btn btn-sm btn-primary"
-                          onClick={() => navigate(`${path(`/businesses/${businessId}/invoices/${cycle.id}`)}${fromQ}`)}
+                          prefetch
                         >
                           View as invoice
-                        </button>
+                        </Link>
                       </div>
                     </article>
                   </li>

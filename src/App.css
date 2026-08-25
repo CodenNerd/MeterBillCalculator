@@ -188,6 +188,182 @@
   margin-bottom: -8px;
 }
 
+.page-nav--row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.breadcrumbs {
+  min-width: 0;
+}
+
+.breadcrumbs-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.breadcrumbs-item {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.breadcrumbs-sep {
+  margin: 0 0.45em;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.breadcrumbs-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.breadcrumbs-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.breadcrumbs-current {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.breadcrumbs-muted {
+  color: var(--muted);
+}
+
+.tenant-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.tenant-switcher-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.tenant-switcher-tab {
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-switcher-tab:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+
+.tenant-switcher-tab.is-active {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.tenant-switcher-select-wrap {
+  flex: 1;
+  min-width: 140px;
+  max-width: 280px;
+}
+
+.tenant-switcher-select {
+  width: 100%;
+}
+
+.tenant-switcher-bound {
+  flex-shrink: 0;
+  min-width: 2rem;
+  padding-inline: 8px;
+}
+
+.tenant-switcher-bound:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.stacked-invoices-jump {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 0;
+  margin-bottom: 8px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.stacked-invoices-jump-link {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.stacked-invoices-jump-link:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink) 25%, var(--border));
+}
+
+.stacked-invoices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.stacked-invoice-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.main--invoice-compact {
+  max-width: none;
+  padding: 0;
+}
+
+.main--invoice .invoice-nav-lead {
+  min-width: 0;
+  flex: 1;
+}
+
+.main--invoice .invoice-nav-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .btn-text {
   background: none;
   border: none;
@@ -196,6 +372,18 @@
   font-weight: 500;
   padding: 4px 0;
   cursor: pointer;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .btn-text:hover { color: var(--ink); }
@@ -289,6 +477,8 @@
   justify-content: center;
   gap: 8px;
   line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .btn:active:not(:disabled) {
@@ -604,6 +794,7 @@
   cursor: pointer;
   text-align: left;
   color: var(--ink);
+  text-decoration: none;
   transition: background 0.15s;
 }
 
@@ -1185,6 +1376,22 @@ button.table-row--clickable {
   opacity: 0.92;
   z-index: 2;
   padding-inline: 4px;
+}
+
+.payment-stamp--unpaid {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-18deg);
+  opacity: 0.92;
+  z-index: 2;
+  padding-inline: 4px;
+}
+
+.payment-stamp--unpaid .payment-stamp-label {
+  color: color-mix(in srgb, var(--danger) 85%, black);
+  border-color: color-mix(in srgb, var(--danger) 70%, black);
+  background: var(--danger-soft);
 }
 
 .payment-stamp-label {
@@ -2504,6 +2711,10 @@ button.table-row--clickable {
   .preview-banner,
   .cycle-sticky-bar,
   .toast,
+  .breadcrumbs,
+  .tenant-switcher,
+  .stacked-invoices-jump,
+  .stacked-invoice-toolbar,
   .no-print {
     display: none !important;
   }

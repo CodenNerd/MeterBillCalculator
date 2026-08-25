@@ -85,7 +85,7 @@ export async function replaceTenant(id, newName) {
 export async function updatePreviousReading(id, value) {
   const { error } = await supabase
     .from('businesses')
-    .update({ previous_reading: value, updated_at: new Date().toISOString() })
+    .update({ previous_reading: value })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
@@ -108,20 +108,30 @@ export async function removeBusiness(id) {
  * Save current readings as the new previous readings for all businesses.
  * Called when a cycle is concluded.
  */
+/**
+ * Save current readings as the new previous readings for businesses.
+ * Called when a cycle is concluded or a new worksheet is seeded from a published cycle.
+ */
 export async function saveCycleReadings(currentReadings) {
   const updates = Array.isArray(currentReadings)
-    ? currentReadings
+    ? currentReadings.map(({ id, previous_reading }) => ({
+        id,
+        previous_reading: Number(previous_reading) || 0,
+      }))
     : Object.entries(currentReadings).map(([id, value]) => ({
-        id: parseInt(id),
+        id: Number.isFinite(Number(id)) ? Number(id) : id,
         previous_reading: parseFloat(value) || 0,
-        updated_at: new Date().toISOString(),
       }))
 
-  const { error } = await supabase
-    .from('businesses')
-    .upsert(updates, { onConflict: 'id' })
+  // Prefer update over upsert: businesses.id is GENERATED ALWAYS, so upsert insert fails.
+  for (const row of updates) {
+    const { error } = await supabase
+      .from('businesses')
+      .update({ previous_reading: row.previous_reading })
+      .eq('id', row.id)
 
-  if (error) throw new Error(error.message)
+    if (error) throw new Error(error.message)
+  }
 }
 
 function mapBillRows(
@@ -315,7 +325,6 @@ export async function concludeCycle(cycleId, complexId, rows, evidenceByBusiness
   const readingUpdates = rows.map(r => ({
     id: r.id,
     previous_reading: r.curr,
-    updated_at: new Date().toISOString(),
   }))
   await saveCycleReadings(readingUpdates)
 
@@ -353,6 +362,22 @@ export async function fetchCycleHistory(complexId) {
 export async function fetchPublishedCycles(complexId) {
   const all = await fetchCycleHistory(complexId)
   return all.filter(c => c.status === 'published')
+}
+
+/**
+ * Set each business previous_reading to that cycle's current_reading.
+ * Used when starting a new worksheet after a published cycle.
+ */
+export async function seedPreviousFromCycle(cycleId) {
+  const rows = await fetchCycleDetail(cycleId)
+  const updates = (rows || [])
+    .filter(r => r.business_id != null)
+    .map(r => ({
+      id: r.business_id,
+      previous_reading: Number(r.current_reading) || 0,
+    }))
+  if (updates.length) await saveCycleReadings(updates)
+  return Object.fromEntries(updates.map(u => [String(u.id), u.previous_reading]))
 }
 
 export async function fetchConcludedCycles(complexId) {

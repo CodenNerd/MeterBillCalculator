@@ -1,20 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import {
   fetchConcludedCycles,
   fetchPublishedCycles,
 } from '../services/supabase'
-import { formatNaira, hasDraftProgress } from '../utils/billing'
-import { navigate } from '../utils/navigation'
+import { formatNaira } from '../utils/billing'
+import { plazaPath } from '../utils/plaza'
 
-function CycleRow({ cycle, onClick }) {
+function CycleRow({ cycle, href }) {
   return (
-    <button
-      type="button"
-      className="home-cycle-row"
-      onClick={onClick}
-    >
+    <Link href={href} className="home-cycle-row" prefetch>
       <span className="home-cycle-date">
         <span className="home-cycle-name">{cycle.name || 'Billing cycle'}</span>
         <span className="home-cycle-when muted">
@@ -38,7 +35,7 @@ function CycleRow({ cycle, onClick }) {
         </span>
       </span>
       <span className="home-cycle-chevron" aria-hidden="true">›</span>
-    </button>
+    </Link>
   )
 }
 
@@ -47,21 +44,16 @@ export default function Home({
   complexName,
   plazaSlug,
   href,
-  current,
-  misc,
-  notes,
-  actualBill,
-  activeCycleId,
   onRefreshKey,
-  onContinuePublished,
+  onStartCycle,
   bannerEnabled,
   bannerText,
+  breadcrumbs,
 }) {
   const [published, setPublished] = useState(null)
   const [concluded, setConcluded] = useState(null)
   const [error, setError] = useState(null)
-  const draftOpen = hasDraftProgress(current, misc, actualBill, notes)
-  const go = (path) => navigate(href ? href(path) : path)
+  const path = (p) => (href ? href(p) : plazaPath(plazaSlug, p))
 
   useEffect(() => {
     if (!complexId) return
@@ -79,12 +71,10 @@ export default function Home({
       .catch(() => setError('Failed to load billing months.'))
   }, [complexId, onRefreshKey])
 
-  const latestPublished = published?.[0] || null
-  const showDraftCallout = draftOpen
-  const showPublishedCallout = !draftOpen && latestPublished
-
   return (
     <main className="main main--home">
+      {breadcrumbs}
+
       {bannerEnabled && bannerText?.trim() && (
         <div className="home-banner" role="status">
           {bannerText.trim()}
@@ -94,53 +84,30 @@ export default function Home({
       <section className="home-hero-band">
         <div className="home-hero-copy-block">
           <p className="home-kicker">{complexName || 'Your plaza'}</p>
-          <h1 className="home-hero-title">
-            {showDraftCallout
-              ? 'Continue this billing cycle'
-              : showPublishedCallout
-                ? 'Open published cycle'
-                : 'Next billing cycle'}
-          </h1>
+          <h1 className="home-hero-title">Next billing cycle</h1>
           <p className="home-hero-copy">
-            {showDraftCallout
-              ? activeCycleId
-                ? 'You are editing a published cycle. Open the worksheet or bills table to continue.'
-                : 'You have unsaved readings or a draft office bill. Pick up where you left off.'
-              : showPublishedCallout
-                ? `${latestPublished.name || 'Published cycle'} is live. Edit readings or conclude when ready.`
-                : 'Enter each business\'s current meter reading and the office bill. Publish when the table looks right.'}
+            Start a blank worksheet. Previous meter readings are taken from the
+            latest published cycle (or last concluded reading). Edit open cycles
+            from the list below.
           </p>
         </div>
         <div className="home-hero-cta">
-          {showPublishedCallout ? (
-            <div className="home-cta-stack">
-              <button
-                className="btn btn-primary btn-lg"
-                onClick={() => onContinuePublished?.(latestPublished.id)}
-              >
-                Continue published
-              </button>
-              <button
-                className="btn btn-ghost"
-                onClick={() => go(`/cycles/${latestPublished.id}`)}
-              >
-                View bills
-              </button>
-            </div>
-          ) : (
-            <button className="btn btn-primary btn-lg" onClick={() => go('/cycle')}>
-              {showDraftCallout ? 'Continue cycle' : 'Start cycle'}
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn btn-primary btn-lg"
+            onClick={() => onStartCycle?.()}
+          >
+            Start cycle
+          </button>
         </div>
       </section>
 
-      {published && published.length > 0 && draftOpen && (
+      {published && published.length > 0 && (
         <section className="home-published-strip">
           <div className="readings-section-head">
             <div>
-              <h2 className="section-title">Published</h2>
-              <p className="section-sub">Open to edit or conclude</p>
+              <h2 className="section-title">Open cycles</h2>
+              <p className="section-sub">Published — open to edit or conclude</p>
             </div>
           </div>
           <div className="home-list">
@@ -148,7 +115,7 @@ export default function Home({
               <CycleRow
                 key={cycle.id}
                 cycle={cycle}
-                onClick={() => go(`/cycles/${cycle.id}`)}
+                href={path(`/cycles/${cycle.id}`)}
               />
             ))}
           </div>
@@ -188,7 +155,7 @@ export default function Home({
               <CycleRow
                 key={cycle.id}
                 cycle={cycle}
-                onClick={() => go(`/cycles/${cycle.id}`)}
+                href={path(`/cycles/${cycle.id}`)}
               />
             ))}
           </div>

@@ -25,6 +25,8 @@ export async function generateMetadata({ params }) {
   const offsetLabel = Number(cycle.line_loss) >= 0 ? 'Offset' : 'Surplus'
   const description = `${plaza?.name || params.plazaSlug} · ${date} · NEPA office ${office} · ${offsetLabel} ${offset}`
 
+  const ogImage = `${siteUrl()}/${params.plazaSlug}/cycles/${params.id}/opengraph-image?v=2`
+
   return {
     title: name,
     description,
@@ -33,11 +35,13 @@ export async function generateMetadata({ params }) {
       description,
       type: 'website',
       url: `${siteUrl()}/${params.plazaSlug}/cycles/${params.id}`,
+      images: [{ url: ogImage, width: 1200, height: 630, alt: name }],
     },
     twitter: {
       card: 'summary_large_image',
       title: name,
       description,
+      images: [ogImage],
     },
   }
 }

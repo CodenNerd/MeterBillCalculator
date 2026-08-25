@@ -25,7 +25,7 @@ export default function InputRow({
 
   const [editingName, setEditingName] = useState(false)
   const [extrasOpen, setExtrasOpen] = useState(hasExtras)
-  const prev = previous[biz.id] ?? 0
+  const prev = Number(previous[biz.id] ?? previous[String(biz.id)] ?? 0)
   const valid = isReadingValid(currentValue, prev)
 
   function handleNameBlur(e) {

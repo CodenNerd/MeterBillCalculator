@@ -34,6 +34,7 @@ function AdminCycleView({ cycleId, preview }) {
         plazaSlug={b.plazaSlug}
         isAdmin
         preview={preview}
+        role={b.role}
         onBack={() => navigate(b.href('/'))}
         onPublish={async (result) => {
           const cycle = await b.fetchCycleById(cycleId, b.complex.id)

@@ -30,6 +30,7 @@ export default function ResultRow({
   const due = hasLineLoss ? row.finalAmount : row.amount
   const status = row.paymentStatus || PAYMENT_AWAITING
   const isPaidStamp = showPaymentStatus && status === PAYMENT_PAID
+  const isUnpaidStamp = showPaymentStatus && status === PAYMENT_UNPAID
   // Avoid nested <button> when payment mark controls are shown.
   const useNativeButton = Boolean(onClick) && !canMarkPayment
   const Tag = useNativeButton ? 'button' : 'div'
@@ -73,6 +74,7 @@ export default function ResultRow({
           'align-right mono amount cell-final',
           showPaymentStatus ? 'cell-final--status' : '',
           isPaidStamp ? 'cell-final--stamped' : '',
+          isUnpaidStamp ? 'cell-final--stamped' : '',
         ].filter(Boolean).join(' ')}
       >
         <span className={`cell-final-amount cell-final-amount--${status}`}>
@@ -88,7 +90,13 @@ export default function ResultRow({
           </span>
         )}
 
-        {showPaymentStatus && status !== PAYMENT_PAID && (
+        {showPaymentStatus && status === PAYMENT_UNPAID && (
+          <span className="payment-stamp payment-stamp--unpaid" aria-label="Unpaid">
+            <span className="payment-stamp-label">UNPAID</span>
+          </span>
+        )}
+
+        {showPaymentStatus && status === PAYMENT_AWAITING && (
           <span className={`payment-status-cue payment-status-cue--${status}`}>
             <span className="payment-status-dot" aria-hidden="true" />
             <span className="payment-status-text">{STATUS_LABEL[status]}</span>
@@ -111,17 +119,7 @@ export default function ResultRow({
                 </button>
               </>
             )}
-            {status === PAYMENT_UNPAID && (
-              <>
-                <button type="button" className="btn-text payment-mark-btn" onClick={() => onMarkPaid?.(row)}>
-                  Mark as paid
-                </button>
-                <button type="button" className="btn-text payment-mark-btn" onClick={() => onClearPayment?.(row)}>
-                  Clear
-                </button>
-              </>
-            )}
-            {status === PAYMENT_PAID && (
+            {(status === PAYMENT_UNPAID || status === PAYMENT_PAID) && (
               <button type="button" className="btn-text payment-mark-btn" onClick={() => onClearPayment?.(row)}>
                 Clear
               </button>

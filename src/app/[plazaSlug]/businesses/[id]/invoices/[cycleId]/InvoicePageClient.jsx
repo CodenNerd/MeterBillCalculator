@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import InvoiceCard from '../../../../../../components/InvoiceCard'
 import Header, { Wordmark } from '../../../../../../components/Header'
 import { AdminGate, useBilling } from '../../../../../../components/providers/BillingProvider'
@@ -9,28 +9,48 @@ import {
   fetchBusinessById,
   fetchBusinessCycleBill,
   fetchComplexSettings,
+  fetchCycleDetail,
 } from '../../../../../../services/supabase'
 import { getEvidenceObjectUrl } from '../../../../../../services/evidenceStore'
-import { navigate } from '../../../../../../utils/navigation'
+import { buildPlazaCrumbs } from '../../../../../../utils/breadcrumbs'
+import { plazaPath } from '../../../../../../utils/plaza'
 
-function InvoiceContent({ businessId, cycleId, complexId, plazaSlug }) {
+function InvoiceContent({
+  businessId,
+  cycleId,
+  complexId,
+  plazaSlug,
+  plazaName,
+  role,
+}) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const fromParam = searchParams.get('from')
   const [payload, setPayload] = useState(null)
   const [settings, setSettings] = useState(null)
+  const [siblings, setSiblings] = useState([])
   const [evidenceUrl, setEvidenceUrl] = useState(null)
   const [error, setError] = useState(null)
+
+  const path = (p) => (plazaSlug ? plazaPath(plazaSlug, p) : p)
+
+  const fromQuery = useMemo(() => {
+    if (!fromParam || !fromParam.startsWith('/')) return ''
+    return `?from=${encodeURIComponent(fromParam)}`
+  }, [fromParam])
 
   useEffect(() => {
     let cancelled = false
     setError(null)
     setPayload(null)
+    setEvidenceUrl(null)
 
     Promise.all([
       fetchBusinessById(businessId),
       fetchBusinessCycleBill(businessId, cycleId),
+      fetchCycleDetail(cycleId),
     ])
-      .then(async ([business, pair]) => {
+      .then(async ([business, pair, detail]) => {
         if (cancelled) return
         if (!business || !pair?.bill || !pair?.cycle) {
           setError('Invoice not found.')
@@ -49,8 +69,16 @@ function InvoiceContent({ businessId, cycleId, complexId, plazaSlug }) {
         const complexSettings = await fetchComplexSettings(business.complex_id)
         if (cancelled) return
 
+        const tenantRows = (detail || [])
+          .filter(b => b.business_id != null)
+          .map(b => ({
+            id: b.business_id,
+            name: b.business_name || 'Tenant',
+          }))
+
         setPayload({ business, bill: pair.bill, cycle })
         setSettings(complexSettings)
+        setSiblings(tenantRows)
 
         if (pair.bill.evidence_file_id) {
           try {
@@ -76,15 +104,39 @@ function InvoiceContent({ businessId, cycleId, complexId, plazaSlug }) {
     }
   }, [evidenceUrl])
 
-  const backToTimeline = () => {
-    const base = plazaSlug
-      ? `/${plazaSlug}/businesses/${businessId}`
-      : `/businesses/${businessId}`
-    const from = fromParam && fromParam.startsWith('/')
-      ? `?from=${encodeURIComponent(fromParam)}`
-      : ''
-    navigate(`${base}${from}`)
-  }
+  const tenants = useMemo(() => (
+    siblings.map(t => ({
+      id: t.id,
+      name: t.name,
+      href: `${path(`/businesses/${t.id}/invoices/${cycleId}`)}${fromQuery}`,
+    }))
+  ), [siblings, plazaSlug, cycleId, fromQuery])
+
+  useEffect(() => {
+    for (const t of tenants) {
+      if (t.href) router.prefetch(t.href)
+    }
+    if (plazaSlug && cycleId) {
+      router.prefetch(path(`/cycles/${cycleId}/invoices`))
+    }
+  }, [tenants, router, plazaSlug, cycleId])
+
+  const crumbs = buildPlazaCrumbs({
+    role,
+    plazaSlug,
+    plazaName,
+    trail: [
+      {
+        label: payload?.cycle?.name || 'Cycle',
+        href: path(`/cycles/${cycleId}`),
+      },
+      {
+        label: payload?.business?.name || 'Tenant',
+        href: `${path(`/businesses/${businessId}`)}${fromQuery}`,
+      },
+      { label: 'Invoice' },
+    ],
+  })
 
   if (error) {
     return <p className="error-text" style={{ padding: 24 }}>{error}</p>
@@ -106,7 +158,9 @@ function InvoiceContent({ businessId, cycleId, complexId, plazaSlug }) {
       cycle={payload.cycle}
       settings={settings}
       evidenceUrl={evidenceUrl}
-      onBack={backToTimeline}
+      breadcrumbs={crumbs}
+      tenants={tenants}
+      viewAllHref={path(`/cycles/${cycleId}/invoices`)}
     />
   )
 }
@@ -134,7 +188,7 @@ function PublicInvoiceShell({ businessId, cycleId, plazaSlug }) {
 }
 
 function AdminInvoiceShell({ businessId, cycleId, plazaSlug }) {
-  const { complex } = useBilling()
+  const { complex, role } = useBilling()
 
   return (
     <AdminGate showHome>
@@ -149,6 +203,8 @@ function AdminInvoiceShell({ businessId, cycleId, plazaSlug }) {
           cycleId={cycleId}
           complexId={complex?.id}
           plazaSlug={plazaSlug}
+          plazaName={complex?.name}
+          role={role}
         />
       </Suspense>
     </AdminGate>

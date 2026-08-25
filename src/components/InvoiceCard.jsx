@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import {
   formatKwh,
   formatNaira,
@@ -8,6 +9,8 @@ import {
   PAYMENT_AWAITING,
   tenantNameForBill,
 } from '../utils/billing'
+import Breadcrumbs from './Breadcrumbs'
+import TenantSwitcher from './TenantSwitcher'
 
 export default function InvoiceCard({
   business,
@@ -16,6 +19,10 @@ export default function InvoiceCard({
   settings,
   evidenceUrl,
   onBack,
+  breadcrumbs,
+  tenants,
+  viewAllHref,
+  compact = false,
 }) {
   const rate = Number(settings?.rate_per_unit) > 0
     ? Number(settings.rate_per_unit)
@@ -29,20 +36,47 @@ export default function InvoiceCard({
   const prev = Number(bill.previous_reading) || 0
   const curr = Number(bill.current_reading) || 0
 
+  const Root = compact ? 'div' : 'main'
+
   return (
-    <main className="main main--invoice">
-      <div className="page-nav no-print">
-        <button type="button" className="btn-text" onClick={onBack}>
-          ← Back to timeline
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm btn-primary"
-          onClick={() => window.print()}
-        >
-          Print / Save PDF
-        </button>
-      </div>
+    <Root className={`main main--invoice ${compact ? 'main--invoice-compact' : ''}`}>
+      {!compact && (
+        <div className="page-nav no-print">
+          <div className="invoice-nav-lead">
+            {breadcrumbs?.length ? (
+              <Breadcrumbs items={breadcrumbs} />
+            ) : onBack ? (
+              <button type="button" className="btn-text" onClick={onBack}>
+                ← Back to timeline
+              </button>
+            ) : null}
+          </div>
+          <div className="invoice-nav-actions">
+            {viewAllHref && (
+              <Link href={viewAllHref} className="btn btn-sm btn-ghost" prefetch>
+                View all
+              </Link>
+            )}
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={() => window.print()}
+            >
+              Print / Save PDF
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!compact && tenants?.length > 1 && (
+        <div className="no-print" style={{ marginBottom: 12, maxWidth: 560 }}>
+          <TenantSwitcher
+            tenants={tenants}
+            currentId={business?.id}
+            ariaLabel="Switch tenant invoice"
+          />
+        </div>
+      )}
 
       <article className="invoice-card invoice-card--print">
         <header className="invoice-head">
@@ -160,6 +194,6 @@ export default function InvoiceCard({
           </section>
         )}
       </article>
-    </main>
+    </Root>
   )
 }

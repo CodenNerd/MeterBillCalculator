@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import InputRow from './InputRow'
+import Breadcrumbs from './Breadcrumbs'
 import {
   ALLOCATION_EQUAL,
   ALLOCATION_PROPORTIONAL,
@@ -11,6 +12,7 @@ import {
   formatNaira,
 } from '../utils/billing'
 import { navigate } from '../utils/navigation'
+import { buildPlazaCrumbs } from '../utils/breadcrumbs'
 
 export default function CyclePage({
   businesses,
@@ -25,6 +27,9 @@ export default function CyclePage({
   activeCycleId,
   ratePerUnit = RATE_PER_UNIT,
   href,
+  plazaSlug,
+  plazaName,
+  role,
   onCurrentChange,
   onMiscChange,
   onNoteChange,
@@ -84,12 +89,17 @@ export default function CyclePage({
     go('/cycles/draft')
   }
 
+  const crumbs = buildPlazaCrumbs({
+    role,
+    plazaSlug,
+    plazaName,
+    trail: [{ label: activeCycleId ? 'Edit worksheet' : 'Worksheet' }],
+  })
+
   return (
     <main className="main main--cycle">
       <header className="cycle-page-head">
-        <button type="button" className="btn-text" onClick={() => go('/')}>
-          ← Home
-        </button>
+        <Breadcrumbs items={crumbs} />
         <div className="cycle-page-titles">
           <h1 className="page-title">
             {activeCycleId ? 'Edit published cycle' : 'Billing cycle'}

@@ -344,13 +344,14 @@ export default function SuperadminPage() {
                         >
                           Edit
                         </button>
-                        <button
-                          type="button"
+                        <a
                           className="btn btn-sm btn-ghost"
-                          onClick={() => navigate(plazaPath(p.slug, '/'))}
+                          href={plazaPath(p.slug, '/')}
+                          target="_blank"
+                          rel="noopener noreferrer"
                         >
-                          Open
-                        </button>
+                          Log on
+                        </a>
                       </div>
                     </div>
                   )}

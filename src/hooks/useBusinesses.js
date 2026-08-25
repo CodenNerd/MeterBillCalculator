@@ -127,7 +127,6 @@ export function useBusinesses(complexId) {
           id: b.id,
           name: b.name,
           previous_reading: nextReading,
-          updated_at: new Date().toISOString(),
         }
       })
 
