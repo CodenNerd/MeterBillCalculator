@@ -364,9 +364,25 @@ export async function fetchPublishedCycles(complexId) {
   return all.filter(c => c.status === 'published')
 }
 
+export async function fetchConcludedCycles(complexId) {
+  const all = await fetchCycleHistory(complexId)
+  return all.filter(c => c.status === 'concluded' || !c.status)
+}
+
+/**
+ * Most recent published or concluded cycle — source for previous meter readings
+ * when starting a fresh worksheet.
+ */
+export async function fetchLatestSeedCycle(complexId) {
+  const all = await fetchCycleHistory(complexId)
+  return (all || []).find(c =>
+    c.status === 'published' || c.status === 'concluded' || !c.status,
+  ) || null
+}
+
 /**
  * Set each business previous_reading to that cycle's current_reading.
- * Used when starting a new worksheet after a published cycle.
+ * Used when starting a new worksheet after a published or concluded cycle.
  */
 export async function seedPreviousFromCycle(cycleId) {
   const rows = await fetchCycleDetail(cycleId)
@@ -378,11 +394,6 @@ export async function seedPreviousFromCycle(cycleId) {
     }))
   if (updates.length) await saveCycleReadings(updates)
   return Object.fromEntries(updates.map(u => [String(u.id), u.previous_reading]))
-}
-
-export async function fetchConcludedCycles(complexId) {
-  const all = await fetchCycleHistory(complexId)
-  return all.filter(c => c.status === 'concluded' || !c.status)
 }
 
 /**

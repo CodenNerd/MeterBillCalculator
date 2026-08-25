@@ -16,7 +16,7 @@ import {
   concludeCycle,
   fetchCycleById,
   fetchCycleDetail,
-  fetchPublishedCycles,
+  fetchLatestSeedCycle,
   seedPreviousFromCycle,
 } from '../../services/supabase'
 import { navigate } from '../../utils/navigation'
@@ -198,15 +198,14 @@ export function BillingProvider({ children }) {
   }
 
   /**
-   * Home CTA: blank worksheet. If a published cycle exists, roll meter
-   * previous readings forward from that cycle's current readings.
+   * Home CTA: blank worksheet. Seed previous meters from the latest
+   * published or concluded cycle's current readings.
    */
   async function startFreshCycle() {
     clearDraft()
     if (complex?.id) {
       try {
-        const published = await fetchPublishedCycles(complex.id)
-        const latest = published?.[0]
+        const latest = await fetchLatestSeedCycle(complex.id)
         if (latest?.id) {
           const rows = await fetchCycleDetail(latest.id)
           const seeded = Object.fromEntries(
@@ -225,7 +224,7 @@ export function BillingProvider({ children }) {
           }
         }
       } catch {
-        showToast('Could not load last published readings')
+        showToast('Could not load previous meter readings')
       }
     }
     navigate(href('/cycle'))

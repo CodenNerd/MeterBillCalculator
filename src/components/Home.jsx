@@ -87,8 +87,7 @@ export default function Home({
           <h1 className="home-hero-title">Next billing cycle</h1>
           <p className="home-hero-copy">
             Start a blank worksheet. Previous meter readings are taken from the
-            latest published cycle (or last concluded reading). Edit open cycles
-            from the list below.
+            latest published or concluded cycle. Edit open cycles from the list below.
           </p>
         </div>
         <div className="home-hero-cta">
