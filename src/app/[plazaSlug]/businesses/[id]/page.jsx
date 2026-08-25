@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense } from 'react'
 import { useParams } from 'next/navigation'
 import BusinessTimeline from '../../../../components/BusinessTimeline'
 import Header, { Wordmark } from '../../../../components/Header'
@@ -44,12 +44,7 @@ function AdminBusinessView({ businessId }) {
 
   return (
     <AdminGate showHome>
-      <Suspense fallback={
-        <div className="status-screen">
-          <div className="spinner" />
-          <p>Loading timeline...</p>
-        </div>
-      }>
+      <Suspense fallback={null}>
         <BusinessTimeline
           businessId={businessId}
           complexId={complex.id}
@@ -67,11 +62,8 @@ function BusinessPageInner() {
   const businessId = params.id
   const plazaSlug = params.plazaSlug
   const { session, ready } = useBilling()
-  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => setMounted(true), [])
-
-  if (!mounted || !ready) {
+  if (!ready) {
     return (
       <div className="app">
         <Header />

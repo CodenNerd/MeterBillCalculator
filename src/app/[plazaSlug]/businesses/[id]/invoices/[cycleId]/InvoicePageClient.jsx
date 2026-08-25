@@ -1,8 +1,12 @@
 'use client'
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import InvoiceCard from '../../../../../../components/InvoiceCard'
+import Breadcrumbs from '../../../../../../components/Breadcrumbs'
+import TenantSwitcher from '../../../../../../components/TenantSwitcher'
+import { useBusinessTenantNav } from '../../../../../../components/BusinessTenantNav'
 import Header, { Wordmark } from '../../../../../../components/Header'
 import { AdminGate, useBilling } from '../../../../../../components/providers/BillingProvider'
 import {
@@ -14,6 +18,12 @@ import {
 import { getEvidenceObjectUrl } from '../../../../../../services/evidenceStore'
 import { buildPlazaCrumbs } from '../../../../../../utils/breadcrumbs'
 import { plazaPath } from '../../../../../../utils/plaza'
+import {
+  getCachedCycleShell,
+  setCachedCycleShell,
+  getCachedInvoice,
+  setCachedInvoice,
+} from '../../../../../../utils/tenantNavCache'
 
 function InvoiceContent({
   businessId,
@@ -26,11 +36,21 @@ function InvoiceContent({
   const searchParams = useSearchParams()
   const router = useRouter()
   const fromParam = searchParams.get('from')
-  const [payload, setPayload] = useState(null)
-  const [settings, setSettings] = useState(null)
-  const [siblings, setSiblings] = useState([])
-  const [evidenceUrl, setEvidenceUrl] = useState(null)
+  const nav = useBusinessTenantNav()
+
+  const cachedInvoice = getCachedInvoice(businessId, cycleId)
+  const cachedShell = getCachedCycleShell(cycleId)
+
+  const [payload, setPayload] = useState(() => (
+    cachedInvoice
+      ? { business: cachedInvoice.business, bill: cachedInvoice.bill, cycle: cachedInvoice.cycle }
+      : null
+  ))
+  const [settings, setSettings] = useState(() => cachedShell?.settings || cachedInvoice?.settings || null)
+  const [cycle, setCycle] = useState(() => cachedInvoice?.cycle || cachedShell?.cycle || null)
+  const [evidenceUrl, setEvidenceUrl] = useState(() => cachedInvoice?.evidenceUrl || null)
   const [error, setError] = useState(null)
+  const [bodyLoading, setBodyLoading] = useState(() => !cachedInvoice)
 
   const path = (p) => (plazaSlug ? plazaPath(plazaSlug, p) : p)
 
@@ -39,58 +59,125 @@ function InvoiceContent({
     return `?from=${encodeURIComponent(fromParam)}`
   }, [fromParam])
 
+  // Settings / shell meta once per cycle (tenant list lives in layout provider)
   useEffect(() => {
+    const cached = getCachedCycleShell(cycleId)
+    if (cached?.settings) {
+      setSettings(cached.settings)
+      return undefined
+    }
+
     let cancelled = false
-    setError(null)
-    setPayload(null)
-    setEvidenceUrl(null)
-
-    Promise.all([
-      fetchBusinessById(businessId),
-      fetchBusinessCycleBill(businessId, cycleId),
-      fetchCycleDetail(cycleId),
-    ])
-      .then(async ([business, pair, detail]) => {
+    fetchCycleDetail(cycleId)
+      .then(async (detail) => {
         if (cancelled) return
-        if (!business || !pair?.bill || !pair?.cycle) {
-          setError('Invoice not found.')
-          return
-        }
-        if (complexId && business.complex_id !== complexId) {
-          setError('Invoice not found.')
-          return
-        }
-        const cycle = pair.cycle
-        if (cycle.status && cycle.status !== 'published' && cycle.status !== 'concluded') {
-          setError('Invoice not found.')
-          return
-        }
-
-        const complexSettings = await fetchComplexSettings(business.complex_id)
-        if (cancelled) return
-
-        const tenantRows = (detail || [])
+        const siblings = (detail || [])
           .filter(b => b.business_id != null)
           .map(b => ({
             id: b.business_id,
             name: b.business_name || 'Tenant',
           }))
+        const first = siblings[0]
+        let complexSettings = null
+        if (first?.id) {
+          const biz = await fetchBusinessById(first.id)
+          if (cancelled) return
+          if (biz?.complex_id) {
+            complexSettings = await fetchComplexSettings(biz.complex_id)
+          }
+        }
+        if (cancelled) return
+        if (complexSettings) setSettings(complexSettings)
+        setCachedCycleShell(cycleId, {
+          ...(getCachedCycleShell(cycleId) || {}),
+          siblings,
+          settings: complexSettings,
+        })
+      })
+      .catch(() => {})
 
-        setPayload({ business, bill: pair.bill, cycle })
-        setSettings(complexSettings)
-        setSiblings(tenantRows)
+    return () => {
+      cancelled = true
+    }
+  }, [cycleId])
 
-        if (pair.bill.evidence_file_id) {
+  // Tenant invoice body — cache hit skips network
+  useEffect(() => {
+    let cancelled = false
+    const hit = getCachedInvoice(businessId, cycleId)
+    if (hit) {
+      setPayload({ business: hit.business, bill: hit.bill, cycle: hit.cycle })
+      setCycle(hit.cycle)
+      if (hit.settings) setSettings(hit.settings)
+      setEvidenceUrl(hit.evidenceUrl || null)
+      setBodyLoading(false)
+      setError(null)
+      return undefined
+    }
+
+    setError(null)
+    setBodyLoading(true)
+
+    Promise.all([
+      fetchBusinessById(businessId),
+      fetchBusinessCycleBill(businessId, cycleId),
+    ])
+      .then(async ([business, pair]) => {
+        if (cancelled) return
+        if (!business || !pair?.bill || !pair?.cycle) {
+          setError('Invoice not found.')
+          setBodyLoading(false)
+          return
+        }
+        if (complexId && business.complex_id !== complexId) {
+          setError('Invoice not found.')
+          setBodyLoading(false)
+          return
+        }
+        const nextCycle = pair.cycle
+        if (nextCycle.status && nextCycle.status !== 'published' && nextCycle.status !== 'concluded') {
+          setError('Invoice not found.')
+          setBodyLoading(false)
+          return
+        }
+
+        let nextSettings = settings
+        if (!nextSettings && business.complex_id) {
           try {
-            const url = await getEvidenceObjectUrl(pair.bill.evidence_file_id)
-            if (!cancelled) setEvidenceUrl(url)
+            nextSettings = await fetchComplexSettings(business.complex_id)
+            if (!cancelled && nextSettings) setSettings(nextSettings)
           } catch {
             // ignore
           }
         }
+
+        let nextEvidence = null
+        if (pair.bill.evidence_file_id) {
+          try {
+            nextEvidence = await getEvidenceObjectUrl(pair.bill.evidence_file_id)
+          } catch {
+            // ignore
+          }
+        }
+        if (cancelled) return
+
+        setCycle(nextCycle)
+        setPayload({ business, bill: pair.bill, cycle: nextCycle })
+        setEvidenceUrl(nextEvidence)
+        setBodyLoading(false)
+        setCachedInvoice(businessId, cycleId, {
+          business,
+          bill: pair.bill,
+          cycle: nextCycle,
+          settings: nextSettings || null,
+          evidenceUrl: nextEvidence,
+        })
       })
       .catch(() => {
-        if (!cancelled) setError('Failed to load invoice.')
+        if (!cancelled) {
+          setError('Failed to load invoice.')
+          setBodyLoading(false)
+        }
       })
 
     return () => {
@@ -98,19 +185,7 @@ function InvoiceContent({
     }
   }, [businessId, cycleId, complexId])
 
-  useEffect(() => {
-    return () => {
-      if (evidenceUrl) URL.revokeObjectURL(evidenceUrl)
-    }
-  }, [evidenceUrl])
-
-  const tenants = useMemo(() => (
-    siblings.map(t => ({
-      id: t.id,
-      name: t.name,
-      href: `${path(`/businesses/${t.id}/invoices/${cycleId}`)}${fromQuery}`,
-    }))
-  ), [siblings, plazaSlug, cycleId, fromQuery])
+  const tenants = nav?.tenants?.length ? nav.tenants : []
 
   useEffect(() => {
     for (const t of tenants) {
@@ -121,28 +196,28 @@ function InvoiceContent({
     }
   }, [tenants, router, plazaSlug, cycleId])
 
+  const activeName = payload?.business?.name
+    || tenants.find(t => String(t.id) === String(businessId))?.name
+    || 'Tenant'
+
   const crumbs = buildPlazaCrumbs({
     role,
     plazaSlug,
     plazaName,
     trail: [
       {
-        label: payload?.cycle?.name || 'Cycle',
+        label: cycle?.name || payload?.cycle?.name || 'Cycle',
         href: path(`/cycles/${cycleId}`),
       },
       {
-        label: payload?.business?.name || 'Tenant',
+        label: activeName,
         href: `${path(`/businesses/${businessId}`)}${fromQuery}`,
       },
       { label: 'Invoice' },
     ],
   })
 
-  if (error) {
-    return <p className="error-text" style={{ padding: 24 }}>{error}</p>
-  }
-
-  if (!payload) {
+  if (!payload && bodyLoading && !tenants.length) {
     return (
       <div className="status-screen">
         <div className="spinner" />
@@ -152,16 +227,64 @@ function InvoiceContent({
   }
 
   return (
-    <InvoiceCard
-      business={payload.business}
-      bill={payload.bill}
-      cycle={payload.cycle}
-      settings={settings}
-      evidenceUrl={evidenceUrl}
-      breadcrumbs={crumbs}
-      tenants={tenants}
-      viewAllHref={path(`/cycles/${cycleId}/invoices`)}
-    />
+    <main className="main main--invoice">
+      <div className="page-nav no-print">
+        <div className="invoice-nav-lead">
+          <Breadcrumbs items={crumbs} />
+        </div>
+        <div className="invoice-nav-actions">
+          <Link
+            href={path(`/cycles/${cycleId}/invoices`)}
+            className="btn btn-sm btn-ghost"
+            prefetch
+            scroll={false}
+          >
+            View all
+          </Link>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary"
+            onClick={() => window.print()}
+            disabled={!payload?.bill}
+          >
+            Print / Save PDF
+          </button>
+        </div>
+      </div>
+
+      {tenants.length > 1 && (
+        <div className="invoice-tenant-nav no-print">
+          <TenantSwitcher
+            tenants={tenants}
+            currentId={businessId}
+            ariaLabel="Switch tenant invoice"
+          />
+        </div>
+      )}
+
+      {error && !payload && (
+        <p className="error-text">{error}</p>
+      )}
+
+      {!error && !payload && bodyLoading && (
+        <div className="invoice-body-loading">
+          <div className="spinner" />
+          <p>Loading invoice...</p>
+        </div>
+      )}
+
+      {payload && (
+        <InvoiceCard
+          business={payload.business}
+          bill={payload.bill}
+          cycle={payload.cycle}
+          settings={settings}
+          evidenceUrl={evidenceUrl}
+          compact
+          loading={bodyLoading}
+        />
+      )}
+    </main>
   )
 }
 
@@ -192,12 +315,7 @@ function AdminInvoiceShell({ businessId, cycleId, plazaSlug }) {
 
   return (
     <AdminGate showHome>
-      <Suspense fallback={
-        <div className="status-screen">
-          <div className="spinner" />
-          <p>Loading invoice...</p>
-        </div>
-      }>
+      <Suspense fallback={null}>
         <InvoiceContent
           businessId={businessId}
           cycleId={cycleId}
@@ -217,11 +335,8 @@ function InvoicePageInner() {
   const cycleId = params.cycleId
   const plazaSlug = params.plazaSlug
   const { session, ready } = useBilling()
-  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => setMounted(true), [])
-
-  if (!mounted || !ready) {
+  if (!ready) {
     return (
       <div className="app">
         <Header />

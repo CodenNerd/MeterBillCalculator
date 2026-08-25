@@ -245,20 +245,25 @@
 
 .tenant-switcher {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
   margin: 4px 0 12px;
+  min-width: 0;
+  width: 100%;
 }
 
 .tenant-switcher-toggle {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   padding: 3px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tenant-switcher-tab {
@@ -272,6 +277,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .tenant-switcher-tab:hover {
@@ -350,6 +356,7 @@
 .main--invoice-compact {
   max-width: none;
   padding: 0;
+  gap: 0;
 }
 
 .main--invoice .invoice-nav-lead {
@@ -362,6 +369,29 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.invoice-tenant-nav {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.invoice-body-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 180px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.invoice-card.is-soft-loading,
+.timeline-body.is-soft-loading {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
 }
 
 .btn-text {
@@ -1458,7 +1488,8 @@ button.table-row--clickable {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
-  max-width: 560px;
+  max-width: none;
+  width: 100%;
 }
 
 .invoice-head {
@@ -2713,6 +2744,7 @@ button.table-row--clickable {
   .toast,
   .breadcrumbs,
   .tenant-switcher,
+  .invoice-tenant-nav,
   .stacked-invoices-jump,
   .stacked-invoice-toolbar,
   .no-print {
@@ -2730,6 +2762,24 @@ button.table-row--clickable {
     padding: 0;
   }
 
+  .main--stacked-invoices {
+    gap: 0;
+  }
+
+  .stacked-invoices-list {
+    gap: 0;
+  }
+
+  .stacked-invoice-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    page-break-after: always;
+  }
+
+  .stacked-invoice-block:last-child {
+    page-break-after: auto;
+  }
+
   .card,
   .panel {
     box-shadow: none;
@@ -2745,6 +2795,7 @@ button.table-row--clickable {
     box-shadow: none;
     border-radius: 0;
     padding: 24px;
+    opacity: 1 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }

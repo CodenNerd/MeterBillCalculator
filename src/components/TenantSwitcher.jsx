@@ -2,17 +2,17 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo } from 'react'
+import { memo, useEffect, useMemo } from 'react'
 
 const SELECT_THRESHOLD = 6
 
 /**
  * Named tenant control: segmented buttons when few, select when many.
- * Optional compact prev/next as secondary.
+ * Uses replace + scroll:false so switching tenants does not feel like a reload.
  *
  * @param {{ id: string|number, name: string, href: string }[]} tenants
  */
-export default function TenantSwitcher({
+function TenantSwitcher({
   tenants = [],
   currentId,
   ariaLabel = 'Switch tenant',
@@ -29,6 +29,11 @@ export default function TenantSwitcher({
   const next = index >= 0 && index < list.length - 1 ? list[index + 1] : null
   const useSelect = list.length > SELECT_THRESHOLD
 
+  function go(href) {
+    if (!href) return
+    router.replace(href, { scroll: false })
+  }
+
   useEffect(() => {
     for (const t of list) {
       if (t.href) router.prefetch(t.href)
@@ -44,7 +49,7 @@ export default function TenantSwitcher({
           type="button"
           className="btn btn-sm btn-ghost tenant-switcher-bound"
           disabled={!prev}
-          onClick={() => prev && router.push(prev.href)}
+          onClick={() => go(prev?.href)}
         >
           ‹
         </button>
@@ -58,7 +63,7 @@ export default function TenantSwitcher({
             value={String(currentId)}
             onChange={e => {
               const t = list.find(row => String(row.id) === e.target.value)
-              if (t) router.push(t.href)
+              if (t) go(t.href)
             }}
           >
             {list.map(t => (
@@ -77,6 +82,8 @@ export default function TenantSwitcher({
                 key={t.id}
                 href={t.href}
                 prefetch
+                scroll={false}
+                replace
                 className={`tenant-switcher-tab ${active ? 'is-active' : ''}`}
                 aria-current={active ? 'page' : undefined}
               >
@@ -92,7 +99,7 @@ export default function TenantSwitcher({
           type="button"
           className="btn btn-sm btn-ghost tenant-switcher-bound"
           disabled={!next}
-          onClick={() => next && router.push(next.href)}
+          onClick={() => go(next?.href)}
           title={next ? next.name : undefined}
         >
           ›
@@ -105,3 +112,5 @@ export default function TenantSwitcher({
     </div>
   )
 }
+
+export default memo(TenantSwitcher)

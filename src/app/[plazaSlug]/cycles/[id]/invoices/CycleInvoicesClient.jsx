@@ -137,8 +137,15 @@ function StackedInvoices({ cycleId, complexId, plazaSlug, role, plazaName }) {
 
   return (
     <main className="main main--stacked-invoices">
-      <div className="page-nav no-print">
+      <div className="page-nav page-nav--row no-print">
         <Breadcrumbs items={crumbs} />
+        <button
+          type="button"
+          className="btn btn-sm btn-primary"
+          onClick={() => window.print()}
+        >
+          Print / Save PDF
+        </button>
       </div>
 
       <header className="cycle-page-titles no-print">

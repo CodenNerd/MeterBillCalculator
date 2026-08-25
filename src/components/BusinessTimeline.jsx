@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import Breadcrumbs from './Breadcrumbs'
 import TenantSwitcher from './TenantSwitcher'
+import { useBusinessTenantNav } from './BusinessTenantNav'
 import {
   fetchBusinessBillTimeline,
   fetchBusinessById,
@@ -21,6 +22,12 @@ import {
 } from '../utils/billing'
 import { buildPlazaCrumbs } from '../utils/breadcrumbs'
 import { plazaPath } from '../utils/plaza'
+import {
+  getCachedBusinesses,
+  setCachedBusinesses,
+  getCachedTimeline,
+  setCachedTimeline,
+} from '../utils/tenantNavCache'
 
 function statusClass(cycle, bill) {
   const status = bill.payment_status || PAYMENT_AWAITING
@@ -46,11 +53,14 @@ export default function BusinessTimeline({
 }) {
   const searchParams = useSearchParams()
   const fromParam = searchParams.get('from')
-  const [business, setBusiness] = useState(null)
-  const [siblings, setSiblings] = useState([])
-  const [items, setItems] = useState(null)
+  const nav = useBusinessTenantNav()
+
+  const cached = getCachedTimeline(businessId)
+  const [business, setBusiness] = useState(() => cached?.business || null)
+  const [items, setItems] = useState(() => cached?.items ?? null)
   const [error, setError] = useState(null)
-  const [thumbs, setThumbs] = useState({})
+  const [thumbs, setThumbs] = useState(() => cached?.thumbs || {})
+  const [bodyLoading, setBodyLoading] = useState(() => !cached)
 
   const path = (p) => (plazaSlug ? plazaPath(plazaSlug, p) : p)
 
@@ -65,10 +75,33 @@ export default function BusinessTimeline({
     return match ? match[1] : null
   }, [fromParam])
 
+  // Register plaza complex with layout provider (persists across id changes)
+  const registerPlazaComplex = nav?.registerPlazaComplex
+  useEffect(() => {
+    if (complexId) {
+      registerPlazaComplex?.(complexId)
+      return
+    }
+    if (business?.complex_id) {
+      registerPlazaComplex?.(business.complex_id)
+    }
+  }, [complexId, business?.complex_id, registerPlazaComplex])
+
   useEffect(() => {
     let cancelled = false
+    const hit = getCachedTimeline(businessId)
+    if (hit) {
+      setBusiness(hit.business)
+      setItems(hit.items)
+      setThumbs(hit.thumbs || {})
+      setBodyLoading(false)
+      setError(null)
+      return undefined
+    }
+
     setError(null)
-    setItems(null)
+    setBodyLoading(true)
+
     Promise.all([
       fetchBusinessById(businessId),
       fetchBusinessBillTimeline(businessId),
@@ -77,17 +110,22 @@ export default function BusinessTimeline({
         if (cancelled) return
         if (!biz || (complexId && biz.complex_id !== complexId)) {
           setError('Business not found.')
+          setBodyLoading(false)
           return
         }
-        setBusiness(biz)
         const visible = (timeline || []).filter(({ cycle }) => isPublicCycle(cycle))
+        setBusiness(biz)
         setItems(visible)
+        setBodyLoading(false)
+        nav?.registerPlazaComplex?.(biz.complex_id)
 
-        try {
-          const list = await fetchBusinesses(biz.complex_id)
-          if (!cancelled) setSiblings(list || [])
-        } catch {
-          if (!cancelled) setSiblings([])
+        if (!getCachedBusinesses(biz.complex_id)) {
+          try {
+            const list = await fetchBusinesses(biz.complex_id)
+            if (!cancelled) setCachedBusinesses(biz.complex_id, list || [])
+          } catch {
+            // ignore
+          }
         }
 
         const urls = {}
@@ -101,10 +139,19 @@ export default function BusinessTimeline({
             }
           }
         }
-        if (!cancelled) setThumbs(urls)
+        if (cancelled) return
+        setThumbs(urls)
+        setCachedTimeline(businessId, {
+          business: biz,
+          items: visible,
+          thumbs: urls,
+        })
       })
       .catch(() => {
-        if (!cancelled) setError('Failed to load bill history.')
+        if (!cancelled) {
+          setError('Failed to load bill history.')
+          setBodyLoading(false)
+        }
       })
 
     return () => {
@@ -112,13 +159,13 @@ export default function BusinessTimeline({
     }
   }, [businessId, complexId])
 
-  const tenants = useMemo(() => (
-    (siblings || []).map(b => ({
-      id: b.id,
-      name: b.name,
-      href: `${path(`/businesses/${b.id}`)}${fromQuery}`,
-    }))
-  ), [siblings, plazaSlug, fromQuery])
+  const tenants = nav?.tenants?.length
+    ? nav.tenants
+    : []
+
+  const crumbLabel = business?.name
+    || tenants.find(b => String(b.id) === String(businessId))?.name
+    || 'Tenant'
 
   const crumbs = buildPlazaCrumbs({
     role: isPublic ? undefined : role,
@@ -128,7 +175,7 @@ export default function BusinessTimeline({
       ...(cycleFrom
         ? [{ label: 'Cycle', href: path(`/cycles/${cycleFrom}`) }]
         : []),
-      { label: business?.name || 'Tenant' },
+      { label: crumbLabel },
     ],
   })
 
@@ -138,31 +185,46 @@ export default function BusinessTimeline({
         <Breadcrumbs items={crumbs} />
       </div>
 
+      {tenants.length > 1 && (
+        <TenantSwitcher
+          tenants={tenants}
+          currentId={businessId}
+          ariaLabel="Switch tenant"
+        />
+      )}
+
       {error && <p className="error-text">{error}</p>}
-      {!error && !business && (
+
+      {!error && !business && bodyLoading && (
         <div className="status-screen">
           <div className="spinner" />
           <p>Loading timeline...</p>
         </div>
       )}
 
-      {business && (
-        <>
+      {!error && (business || !bodyLoading) && (
+        <div className={`timeline-body ${bodyLoading ? 'is-soft-loading' : ''}`}>
           <header className="cycle-page-titles">
-            <h1 className="page-title">{business.name}</h1>
+            <h1 className="page-title">{business?.name || crumbLabel}</h1>
             <p className="page-lede">
-              Bill timeline · Previous reading on file:{' '}
-              <span className="mono">{formatKwh(business.previous_reading)}</span>
+              Bill timeline
+              {business ? (
+                <>
+                  {' · Previous reading on file: '}
+                  <span className="mono">{formatKwh(business.previous_reading)}</span>
+                </>
+              ) : null}
             </p>
           </header>
 
-          <TenantSwitcher
-            tenants={tenants}
-            currentId={businessId}
-            ariaLabel="Switch tenant"
-          />
+          {bodyLoading && !items && (
+            <div className="invoice-body-loading">
+              <div className="spinner" />
+              <p>Loading timeline...</p>
+            </div>
+          )}
 
-          {items && items.length === 0 && (
+          {items && items.length === 0 && !bodyLoading && (
             <div className="empty-state empty-state--panel">
               No bills recorded for this business yet.
             </div>
@@ -188,7 +250,7 @@ export default function BusinessTimeline({
                             {cycle.status === 'published' ? 'Published' : 'Concluded'}
                           </p>
                           {bill.business_name
-                            && business.name
+                            && business?.name
                             && bill.business_name.trim() !== business.name.trim() && (
                             <p className="muted timeline-tenant-snap">
                               Billed as <strong>{bill.business_name}</strong>
@@ -226,6 +288,7 @@ export default function BusinessTimeline({
                           href={path(`/cycles/${cycle.id}`)}
                           className="btn btn-sm btn-ghost"
                           prefetch
+                          scroll={false}
                         >
                           View cycle overview
                         </Link>
@@ -233,6 +296,7 @@ export default function BusinessTimeline({
                           href={`${path(`/businesses/${businessId}/invoices/${cycle.id}`)}${fromQuery}`}
                           className="btn btn-sm btn-primary"
                           prefetch
+                          scroll={false}
                         >
                           View as invoice
                         </Link>
@@ -243,7 +307,7 @@ export default function BusinessTimeline({
               })}
             </ol>
           )}
-        </>
+        </div>
       )}
     </main>
   )
