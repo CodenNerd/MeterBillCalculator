@@ -289,7 +289,7 @@ export function BillingProvider({ children }) {
         showToast('Could not load previous meter readings')
       }
     }
-    navigate(href('/cycle'))
+    navigate(href('/worksheet'))
   }
 
   function handleClear() {
@@ -322,7 +322,12 @@ export function BillingProvider({ children }) {
 
     let precedingCurrents = {}
     try {
-      precedingCurrents = await fetchPrecedingCurrentReadings(complex.id, cycle)
+      precedingCurrents = await fetchPrecedingCurrentReadings(complex.id, cycle, {
+        businessIds: [
+          ...(rows || []).map(r => r.business_id),
+          ...(businesses || []).map(b => b.id),
+        ].filter(id => id != null),
+      })
     } catch {
       precedingCurrents = {}
     }
@@ -332,14 +337,17 @@ export function BillingProvider({ children }) {
     const nextNotes = {}
     const nextPrevious = {}
     const nextExclude = {}
+    for (const [id, value] of Object.entries(precedingCurrents)) {
+      nextPrevious[id] = Number(value) || 0
+    }
     for (const r of rows) {
       nextCurrent[r.business_id] = String(r.current_reading)
       nextMisc[r.business_id] = r.misc ? String(r.misc) : ''
       nextNotes[r.business_id] = r.misc_note || ''
       const chained = precedingCurrents[r.business_id] ?? precedingCurrents[String(r.business_id)]
-      nextPrevious[r.business_id] = chained != null
-        ? Number(chained) || 0
-        : Number(r.previous_reading) || 0
+      if (chained == null) {
+        nextPrevious[r.business_id] = Number(r.previous_reading) || 0
+      }
       if (r.exclude_from_offset) nextExclude[r.business_id] = true
     }
     setCurrent(nextCurrent)
@@ -361,12 +369,7 @@ export function BillingProvider({ children }) {
   }
 
   async function handleContinuePublished(cycleId) {
-    try {
-      await hydrateFromCycle(cycleId)
-      navigate(href('/cycle'))
-    } catch {
-      showToast('Could not open published cycle')
-    }
+    navigate(href(`/cycles/${cycleId}/worksheet`))
   }
 
   function resolveExistingCycleId(overrides = {}) {

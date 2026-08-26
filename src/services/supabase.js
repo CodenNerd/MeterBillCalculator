@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseUrl, getSupabasePublishableKey, isSupabaseConfigured } from '../lib/env'
-import { findPrecedingCycle } from '../utils/billing'
+import { compareCyclesAsc } from '../utils/billing'
 
 const SUPABASE_URL = getSupabaseUrl()
 const SUPABASE_PUBLISHABLE_KEY = getSupabasePublishableKey()
@@ -403,29 +403,77 @@ export async function fetchCycleHistory(complexId) {
 }
 
 /**
- * Current readings from the cycle immediately before `anchor` in plaza order.
- * Used so each cycle’s previous meters chain from the preceding cycle.
+ * Cycles strictly before `anchor`, newest-first (immediate predecessor first).
+ */
+function cyclesBeforeAnchor(history, anchor) {
+  const sorted = [...(history || [])].sort(compareCyclesAsc)
+  let beforeAsc
+  if (anchor?.id != null && anchor.id !== '') {
+    const idx = sorted.findIndex(c => String(c.id) === String(anchor.id))
+    if (idx >= 0) beforeAsc = sorted.slice(0, idx)
+    else beforeAsc = sorted.filter(c => compareCyclesAsc(c, anchor) < 0)
+  } else {
+    beforeAsc = sorted.filter(c => compareCyclesAsc(c, anchor) < 0)
+  }
+  return [...beforeAsc].reverse()
+}
+
+/**
+ * Current readings that should seed `previous` for `anchor`.
+ * Walks older cycles (newest preceding first) so a shop missing from the
+ * immediate predecessor (deleted/restored, carry-over omit, etc.) still
+ * picks up the latest earlier current for that business_id.
  *
  * @param {string} complexId
  * @param {{ id?: string|number, cycle_date?: string, published_at?: string, created_at?: string }} anchor
+ * @param {{ businessIds?: Array<string|number> }} [options] — if set, stop early once all are filled
  * @returns {Promise<Record<string, number>>} businessId → current_reading
  */
-export async function fetchPrecedingCurrentReadings(complexId, anchor) {
+export async function fetchPrecedingCurrentReadings(complexId, anchor, options = {}) {
   if (!complexId || !anchor) return {}
   const history = await fetchCycleHistory(complexId)
-  const preceding = findPrecedingCycle(history || [], {
+  const walkOrder = cyclesBeforeAnchor(history || [], {
     id: anchor.id,
     cycle_date: anchor.cycle_date || anchor.cycleDate || new Date().toISOString(),
     published_at: anchor.published_at || anchor.publishedAt || null,
     created_at: anchor.created_at || anchor.createdAt || null,
   })
-  if (!preceding?.id) return {}
-  const rows = await fetchCycleDetail(preceding.id)
-  return Object.fromEntries(
-    (rows || [])
-      .filter(r => r.business_id != null)
-      .map(r => [String(r.business_id), Number(r.current_reading) || 0]),
-  )
+  if (!walkOrder.length) return {}
+
+  const needed = options.businessIds?.length
+    ? new Set(options.businessIds.map(String))
+    : null
+
+  const cycleIds = walkOrder.map(c => c.id)
+  const { data, error } = await supabase
+    .from('cycle_business_bills')
+    .select('cycle_id, business_id, current_reading')
+    .in('cycle_id', cycleIds)
+
+  if (error) throw new Error(error.message)
+
+  const byCycle = new Map()
+  for (const row of data || []) {
+    if (row.business_id == null) continue
+    const cid = String(row.cycle_id)
+    if (!byCycle.has(cid)) byCycle.set(cid, [])
+    byCycle.get(cid).push(row)
+  }
+
+  const readings = {}
+  for (const cycle of walkOrder) {
+    const rows = byCycle.get(String(cycle.id)) || []
+    for (const r of rows) {
+      const key = String(r.business_id)
+      if (Object.prototype.hasOwnProperty.call(readings, key)) continue
+      if (needed && !needed.has(key)) continue
+      readings[key] = Number(r.current_reading) || 0
+    }
+    if (needed && [...needed].every(id => Object.prototype.hasOwnProperty.call(readings, id))) {
+      break
+    }
+  }
+  return readings
 }
 
 export async function fetchPublishedCycles(complexId) {

@@ -22,7 +22,9 @@ export default function InputRow({
   onRemove,
   live,
   readOnly = false,
+  allowManageBusinesses = true,
 }) {
+  const canManage = allowManageBusinesses && !readOnly
   const hasExtras =
     (miscValue !== '' && miscValue != null && parseFloat(miscValue) > 0)
     || Boolean(noteValue && String(noteValue).trim())
@@ -47,7 +49,7 @@ export default function InputRow({
           <header className="biz-block-head">
             <div className="biz-info">
               <span className="biz-num">{displayNumber}</span>
-              {editingName && !readOnly ? (
+              {editingName && canManage ? (
                 <input
                   className="name-input"
                   defaultValue={biz.name}
@@ -58,17 +60,17 @@ export default function InputRow({
               ) : (
                 <button
                   className="biz-name"
-                  onClick={() => !readOnly && setEditingName(true)}
-                  title={readOnly ? undefined : 'Click to rename'}
+                  onClick={() => canManage && setEditingName(true)}
+                  title={canManage ? 'Click to rename' : undefined}
                   type="button"
-                  disabled={readOnly}
+                  disabled={!canManage}
                 >
                   {biz.name}
-                  {!readOnly && <span className="edit-hint">edit</span>}
+                  {canManage && <span className="edit-hint">edit</span>}
                 </button>
               )}
             </div>
-            {!readOnly && (
+            {canManage && (
               <div className="biz-block-actions">
                 <button
                   className="btn-text biz-action-btn"

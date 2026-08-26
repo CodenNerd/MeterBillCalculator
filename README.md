@@ -52,7 +52,8 @@ Each plaza has a URL slug. Admin and public routes live under `/{plazaSlug}/…`
 |---|---|
 | `/superadmin` | Create/list plazas (superadmin only) |
 | `/{slug}/` | Plaza admin home |
-| `/{slug}/cycle` | Worksheet |
+| `/{slug}/worksheet` | New billing worksheet |
+| `/{slug}/cycles/{id}/worksheet` | Edit a published cycle’s worksheet |
 | `/{slug}/cycles/{id}` | Published cycle (shareable) |
 | `/{slug}/settings` | Plaza settings |
 | `/{slug}/businesses/{id}` | Tenant timeline |

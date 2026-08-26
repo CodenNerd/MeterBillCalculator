@@ -52,13 +52,8 @@ function AdminCycleView({ cycleId, preview }) {
             cycleDate: cycle ? toDateInputValue(cycle.cycle_date) : b.cycleDate,
           })
         }}
-        onEditWorksheet={async () => {
-          try {
-            await b.hydrateFromCycle(cycleId)
-            navigate(b.href('/cycle'))
-          } catch {
-            b.showToast('Could not open worksheet')
-          }
+        onEditWorksheet={() => {
+          navigate(b.href(`/cycles/${cycleId}/worksheet`))
         }}
       />
     </AdminGate>

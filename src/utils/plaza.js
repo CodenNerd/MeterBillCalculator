@@ -9,6 +9,7 @@ export const RESERVED_PLAZA_SLUGS = new Set([
   'settings',
   'cycle',
   'cycles',
+  'worksheet',
   'businesses',
   'admin',
   'app',

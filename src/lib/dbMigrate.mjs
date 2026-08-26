@@ -34,6 +34,11 @@ export const MIGRATIONS = [
     file: 'supabase-migration-restore-orphaned-businesses.sql',
     description: 'Recreate hard-deleted businesses from cycle bill history',
   },
+  {
+    id: '2026-08-26-chain-previous-readings',
+    file: 'supabase-migration-chain-previous-readings.sql',
+    description: 'Repair published cycle previous_reading from nearest older cycle bill',
+  },
 ]
 
 /** Advisory lock key so concurrent serverless starts don't race. */

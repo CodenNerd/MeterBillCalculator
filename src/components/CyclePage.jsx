@@ -47,6 +47,8 @@ export default function CyclePage({
   onRemove,
   onAddBusiness,
   onClear,
+  onViewBills,
+  guestMode = false,
 }) {
   const go = (path) => navigate(href ? href(path) : path)
   const rate = Number(ratePerUnit) > 0 ? Number(ratePerUnit) : RATE_PER_UNIT
@@ -97,6 +99,10 @@ export default function CyclePage({
   }, [result, hasLineLoss])
 
   function goToBills() {
+    if (onViewBills) {
+      onViewBills(result)
+      return
+    }
     go('/cycles/draft')
   }
 
@@ -104,7 +110,7 @@ export default function CyclePage({
     role,
     plazaSlug,
     plazaName,
-    trail: [{ label: activeCycleId ? 'Edit worksheet' : 'Worksheet' }],
+    trail: [{ label: guestMode ? 'Sandbox worksheet' : (activeCycleId ? 'Edit worksheet' : 'Worksheet') }],
   })
 
   return (
@@ -113,11 +119,16 @@ export default function CyclePage({
         <Breadcrumbs items={crumbs} />
         <div className="cycle-page-titles">
           <h1 className="page-title">
-            {activeCycleId ? 'Edit published cycle' : 'Billing cycle'}
+            {guestMode
+              ? 'Sandbox worksheet'
+              : activeCycleId
+                ? 'Edit published cycle'
+                : 'Billing cycle'}
           </h1>
           <p className="page-lede">
-            Set the cycle date and name, enter the NEPA office bill, then update each meter reading (kWh).
-            Publish from the bills page when ready.
+            {guestMode
+              ? 'Tinker with readings and the office bill to see how amounts change. Nothing is saved.'
+              : 'Set the cycle date and name, enter the NEPA office bill, then update each meter reading (kWh). Publish from the bills page when ready.'}
           </p>
         </div>
       </header>
@@ -218,9 +229,11 @@ export default function CyclePage({
             <h2 className="section-title">Business readings</h2>
             <p className="section-sub">Meter values in kWh · charges in ₦</p>
           </div>
-          <button className="btn btn-outline btn-sm" onClick={onAddBusiness} type="button">
-            Add business
-          </button>
+          {!guestMode && (
+            <button className="btn btn-outline btn-sm" onClick={onAddBusiness} type="button">
+              Add business
+            </button>
+          )}
         </div>
 
         <div className="biz-list">
@@ -260,13 +273,16 @@ export default function CyclePage({
                 onReplaceTenant={onReplaceTenant}
                 onRemove={onRemove}
                 live={live}
+                allowManageBusinesses={!guestMode}
               />
             )
           })}
 
           {businesses.length === 0 && (
             <div className="empty-state empty-state--panel">
-              No businesses yet. Add a business to start entering readings.
+              {guestMode
+                ? 'No businesses in this cycle to explore.'
+                : 'No businesses yet. Add a business to start entering readings.'}
             </div>
           )}
         </div>
@@ -277,14 +293,16 @@ export default function CyclePage({
           {!canViewBills && billedCount > 0 && (
             <p className="cycle-sticky-hint">Enter the NEPA office bill (₦) to view the bills table.</p>
           )}
-          {businesses.length === 0 && (
+          {businesses.length === 0 && !guestMode && (
             <p className="cycle-sticky-hint">Add at least one business to continue.</p>
           )}
           {businesses.length > 0 && billedCount === 0 && (
             <p className="cycle-sticky-hint">At least one business must be included in this cycle (not carry-over only).</p>
           )}
           <div className="cycle-sticky-actions">
-            <button className="btn btn-ghost" onClick={onClear} type="button">Clear</button>
+            {!guestMode && (
+              <button className="btn btn-ghost" onClick={onClear} type="button">Clear</button>
+            )}
             <button
               className="btn btn-primary"
               onClick={goToBills}

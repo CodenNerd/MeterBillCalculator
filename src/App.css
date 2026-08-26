@@ -1235,6 +1235,15 @@ button.table-row--clickable {
   font-weight: 600;
 }
 
+.guest-sandbox-banner {
+  padding: 10px 18px;
+  background: color-mix(in srgb, var(--accent, #1a5f4a) 10%, var(--surface));
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-align: center;
+}
+
 .payment-view-toggle {
   display: inline-flex;
   gap: 2px;

@@ -219,7 +219,11 @@ export default function BillsTablePage({
         let precedingCurrents = null
         if (cycle.status === 'published' && cycle.complex_id) {
           try {
-            precedingCurrents = await fetchPrecedingCurrentReadings(cycle.complex_id, cycle)
+            precedingCurrents = await fetchPrecedingCurrentReadings(
+              cycle.complex_id,
+              cycle,
+              { businessIds: (rows || []).map(r => r.business_id).filter(id => id != null) },
+            )
           } catch {
             precedingCurrents = null
           }
@@ -333,6 +337,11 @@ export default function BillsTablePage({
 
   function cycleHref(path) {
     return plazaSlug ? plazaPath(plazaSlug, path) : path
+  }
+
+  function worksheetPath() {
+    if (activeCycleId) return cycleHref(`/cycles/${activeCycleId}/worksheet`)
+    return cycleHref('/worksheet')
   }
 
   useEffect(() => {
@@ -542,7 +551,7 @@ export default function BillsTablePage({
       <div className="app">
         <div className="status-screen">
           <p className="error-text">No draft cycle to show.</p>
-          <button className="btn btn-primary" onClick={() => navigate(cycleHref('/cycle'))}>
+          <button className="btn btn-primary" onClick={() => navigate(worksheetPath())}>
             Back to worksheet
           </button>
         </div>
@@ -585,7 +594,7 @@ export default function BillsTablePage({
                 plazaSlug,
                 plazaName: complexName,
                 trail: mode === 'draft'
-                  ? [{ label: 'Worksheet', href: cycleHref('/cycle') }, { label: 'Bills' }]
+                  ? [{ label: 'Worksheet', href: worksheetPath() }, { label: 'Bills' }]
                   : [{ label: displayName || 'Cycle' }],
               })}
             />
@@ -671,9 +680,9 @@ export default function BillsTablePage({
                   </div>
                 </div>
 
-                {(canPreviewShared || (canManage && isPublished && onEditWorksheet)) && (
+                {(canPreviewShared || (canManage && isPublished && onEditWorksheet) || (!isAdmin && (isPublished || isConcluded) && cycleId && plazaSlug)) && (
                   <div className="bills-toolbar-group">
-                    <span className="bills-toolbar-label">Manage</span>
+                    <span className="bills-toolbar-label">{isAdmin ? 'Manage' : 'Explore'}</span>
                     <div className="bills-toolbar-actions">
                       {canPreviewShared && (
                         <button className="btn btn-sm btn-ghost" onClick={enterPreview}>
@@ -684,6 +693,15 @@ export default function BillsTablePage({
                         <button className="btn btn-sm btn-ghost" onClick={onEditWorksheet}>
                           Edit worksheet
                         </button>
+                      )}
+                      {!isAdmin && (isPublished || isConcluded) && cycleId && plazaSlug && (
+                        <Link
+                          href={cycleHref(`/cycles/${cycleId}/worksheet`)}
+                          className="btn btn-sm btn-primary"
+                          prefetch
+                        >
+                          Try worksheet
+                        </Link>
                       )}
                     </div>
                   </div>

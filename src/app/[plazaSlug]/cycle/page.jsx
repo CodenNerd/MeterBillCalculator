@@ -1,50 +1,28 @@
 'use client'
 
-import CyclePage from '../../../components/CyclePage'
+import { useEffect } from 'react'
 import { AdminGate, useBilling } from '../../../components/providers/BillingProvider'
-import { ALLOCATION_EQUAL } from '../../../utils/billing'
+import { navigate } from '../../../utils/navigation'
 
-export default function CycleWorksheetPage() {
-  const b = useBilling()
+/** Legacy /{plaza}/cycle → /worksheet or /cycles/:id/worksheet */
+export default function LegacyCycleRedirectPage() {
+  const { ready, activeCycleId, plazaSlug, href } = useBilling()
+
+  useEffect(() => {
+    if (!ready || !plazaSlug) return
+    if (activeCycleId) {
+      navigate(href(`/cycles/${activeCycleId}/worksheet`))
+    } else {
+      navigate(href('/worksheet'))
+    }
+  }, [ready, activeCycleId, plazaSlug, href])
 
   return (
     <AdminGate showHome>
-      <CyclePage
-        businesses={b.bizList}
-        previous={b.previous}
-        current={b.current}
-        misc={b.misc}
-        notes={b.notes}
-        excludeFromOffset={b.excludeFromOffset}
-        carryOver={b.carryOver}
-        actualBill={b.actualBill}
-        allocationMethod={b.allocationMethod || ALLOCATION_EQUAL}
-        cycleDate={b.cycleDate}
-        cycleName={b.cycleName}
-        activeCycleId={b.activeCycleId}
-        ratePerUnit={b.ratePerUnit}
-        href={b.href}
-        plazaSlug={b.plazaSlug}
-        plazaName={b.complex?.name}
-        role={b.role}
-        onCurrentChange={b.handleCurrentChange}
-        onMiscChange={b.handleMiscChange}
-        onNoteChange={b.handleNoteChange}
-        onExcludeFromOffsetChange={b.handleExcludeFromOffsetChange}
-        onCarryOverChange={b.handleCarryOverChange}
-        onActualBillChange={b.setActualBill}
-        onAllocationMethodChange={b.setAllocationMethod}
-        onCycleDateChange={b.setCycleDate}
-        onCycleNameChange={b.setCycleName}
-        onRename={b.handleRename}
-        onReplaceTenant={(biz) => {
-          const full = (b.businesses || []).find(row => String(row.id) === String(biz.id))
-          b.setReplaceTarget(full || biz)
-        }}
-        onRemove={b.handleRemove}
-        onAddBusiness={() => b.setShowAddBusiness(true)}
-        onClear={b.handleClear}
-      />
+      <div className="status-screen">
+        <div className="spinner" />
+        <p>Opening worksheet...</p>
+      </div>
     </AdminGate>
   )
 }
