@@ -1,10 +1,10 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import CycleWorksheetView from '../../components/CycleWorksheetView'
-import GuestWorksheetSandbox from '../../components/GuestWorksheetSandbox'
-import Header from '../../components/Header'
-import { AdminGate, useBilling } from '../../components/providers/BillingProvider'
+import CycleWorksheetView from '../../../components/CycleWorksheetView'
+import GuestWorksheetSandbox from '../../../components/GuestWorksheetSandbox'
+import Header from '../../../components/Header'
+import { AdminGate, useBilling } from '../../../components/providers/BillingProvider'
 
 export default function NewWorksheetPage() {
   const params = useParams()
