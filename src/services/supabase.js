@@ -192,6 +192,7 @@ export async function publishCycle(summary, rows, complexId, existingCycleId = n
     name: summary.name || null,
     cycle_date: summary.cycleDate || new Date().toISOString(),
     status: 'published',
+    published_at: new Date().toISOString(),
   }
 
   let cycle
@@ -346,7 +347,8 @@ export async function saveBillingCycle(summary, rows, complexId) {
 }
 
 /**
- * Fetch past billing cycles for one complex, most recent first.
+ * Fetch past billing cycles for one complex.
+ * Ordered by cycle_date (newest first), then published_at, then created_at.
  */
 export async function fetchCycleHistory(complexId) {
   const { data, error } = await supabase
@@ -354,6 +356,8 @@ export async function fetchCycleHistory(complexId) {
     .select('*')
     .eq('complex_id', complexId)
     .order('cycle_date', { ascending: false })
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
   return data

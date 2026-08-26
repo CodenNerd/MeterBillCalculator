@@ -11,7 +11,7 @@ import { plazaPath } from '../utils/plaza'
 
 function CycleRow({ cycle, href }) {
   return (
-    <Link href={href} className="home-cycle-row" prefetch>
+    <Link href={href} className="home-cycle-row" prefetch scroll={false}>
       <span className="home-cycle-date">
         <span className="home-cycle-name">{cycle.name || 'Billing cycle'}</span>
         <span className="home-cycle-when muted">
@@ -49,6 +49,7 @@ export default function Home({
   bannerEnabled,
   bannerText,
   breadcrumbs,
+  readOnly = false,
 }) {
   const [published, setPublished] = useState(null)
   const [concluded, setConcluded] = useState(null)
@@ -81,32 +82,49 @@ export default function Home({
         </div>
       )}
 
-      <section className="home-hero-band">
-        <div className="home-hero-copy-block">
-          <p className="home-kicker">{complexName || 'Your plaza'}</p>
-          <h1 className="home-hero-title">Next billing cycle</h1>
-          <p className="home-hero-copy">
-            Start a blank worksheet. Previous meter readings are taken from the
-            latest published or concluded cycle. Edit open cycles from the list below.
-          </p>
-        </div>
-        <div className="home-hero-cta">
-          <button
-            type="button"
-            className="btn btn-primary btn-lg"
-            onClick={() => onStartCycle?.()}
-          >
-            Start cycle
-          </button>
-        </div>
-      </section>
+      {!readOnly && (
+        <section className="home-hero-band">
+          <div className="home-hero-copy-block">
+            <p className="home-kicker">{complexName || 'Your plaza'}</p>
+            <h1 className="home-hero-title">Next billing cycle</h1>
+            <p className="home-hero-copy">
+              Start a blank worksheet. Previous meter readings are taken from the
+              latest cycle by date (then last published). Edit open cycles from the list below.
+            </p>
+          </div>
+          <div className="home-hero-cta">
+            <button
+              type="button"
+              className="btn btn-primary btn-lg"
+              onClick={() => onStartCycle?.()}
+            >
+              Start cycle
+            </button>
+          </div>
+        </section>
+      )}
+
+      {readOnly && (
+        <section className="home-hero-band">
+          <div className="home-hero-copy-block">
+            <p className="home-kicker">{complexName || 'Plaza'}</p>
+            <h1 className="home-hero-title">Billing cycles</h1>
+            <p className="home-hero-copy">
+              View published and past cycles for this plaza. Open a cycle to see bills,
+              tenant timelines, and invoices.
+            </p>
+          </div>
+        </section>
+      )}
 
       {published && published.length > 0 && (
         <section className="home-published-strip">
           <div className="readings-section-head">
             <div>
               <h2 className="section-title">Open cycles</h2>
-              <p className="section-sub">Published — open to edit or conclude</p>
+              <p className="section-sub">
+                {readOnly ? 'Published cycles' : 'Published — open to edit or conclude'}
+              </p>
             </div>
           </div>
           <div className="home-list">
@@ -143,7 +161,9 @@ export default function Home({
           <div className="home-list">
             <div className="home-empty">
               <div className="home-empty-mark" aria-hidden="true" />
-              No concluded cycles yet. Publish a draft, then conclude it to lock readings here.
+              {readOnly
+                ? 'No concluded cycles yet.'
+                : 'No concluded cycles yet. Publish a draft, then conclude it to lock readings here.'}
             </div>
           </div>
         )}

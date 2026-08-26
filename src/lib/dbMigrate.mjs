@@ -19,6 +19,11 @@ export const MIGRATIONS = [
     file: 'supabase-bootstrap.sql',
     description: 'Full MeterCalc schema (tables, RLS, plazas, payments)',
   },
+  {
+    id: '2026-08-26-published-at',
+    file: 'supabase-migration-published-at.sql',
+    description: 'billing_cycles.published_at for date + publish-time ordering',
+  },
 ]
 
 /** Advisory lock key so concurrent serverless starts don't race. */
