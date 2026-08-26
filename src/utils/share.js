@@ -1,4 +1,5 @@
 import { siteUrl } from '../lib/env'
+import { computeCycleResult } from './billing'
 
 // Unicode-safe base64 encode/decode so the ₦ symbol and business names
 // with accents survive the round trip through a URL.
@@ -54,8 +55,73 @@ export function buildCycleTablePayload(result, ctx = {}) {
   }
 }
 
-/** Map a saved cycle + detail rows into the shape ResultsTable expects. */
-export function resultFromSavedCycle(cycle, detailRows) {
+/** Map a saved cycle + detail rows into the shape ResultsTable expects.
+ * For open published cycles, pass precedingCurrents (from the prior cycle)
+ * so previous/units/amounts chain correctly instead of a stale snapshot.
+ */
+export function resultFromSavedCycle(cycle, detailRows, options = {}) {
+  const precedingCurrents = options.precedingCurrents
+  const ratePerUnit = options.ratePerUnit
+  const shouldChain =
+    cycle?.status === 'published'
+    && precedingCurrents
+    && typeof precedingCurrents === 'object'
+
+  if (shouldChain) {
+    const businesses = (detailRows || []).map(r => ({
+      id: r.business_id,
+      name: r.business_name,
+    }))
+    const previous = {}
+    const current = {}
+    const misc = {}
+    const notes = {}
+    const excludeFromOffset = {}
+    const paymentById = {}
+
+    for (const r of detailRows || []) {
+      const id = r.business_id
+      const key = String(id)
+      const chained = precedingCurrents[id] ?? precedingCurrents[key]
+      previous[id] = chained != null ? Number(chained) || 0 : Number(r.previous_reading) || 0
+      current[id] = Number(r.current_reading) || 0
+      misc[id] = r.misc != null ? String(r.misc) : ''
+      notes[id] = r.misc_note || ''
+      if (r.exclude_from_offset) excludeFromOffset[id] = true
+      paymentById[key] = {
+        paymentStatus: r.payment_status || 'awaiting',
+        amountPaid: r.amount_paid == null ? null : Number(r.amount_paid),
+      }
+    }
+
+    const computed = computeCycleResult(
+      businesses,
+      previous,
+      current,
+      misc,
+      cycle.actual_bill,
+      cycle.allocation_method || 'equal',
+      notes,
+      ratePerUnit,
+      { excludeFromOffset },
+    )
+
+    const rows = computed.rows.map(row => {
+      const pay = paymentById[String(row.id)] || {}
+      return {
+        ...row,
+        paymentStatus: pay.paymentStatus || 'awaiting',
+        amountPaid: pay.amountPaid,
+      }
+    })
+
+    return {
+      ...computed,
+      rows,
+      hasLineLoss: computed.lineLoss !== undefined,
+    }
+  }
+
   const rows = detailRows.map(r => ({
     id: r.business_id,
     name: r.business_name,

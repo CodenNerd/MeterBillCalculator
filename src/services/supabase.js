@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { getSupabaseUrl, getSupabasePublishableKey, isSupabaseConfigured } from '../lib/env'
+import { findPrecedingCycle } from '../utils/billing'
 
 const SUPABASE_URL = getSupabaseUrl()
 const SUPABASE_PUBLISHABLE_KEY = getSupabasePublishableKey()
@@ -399,6 +400,32 @@ export async function fetchCycleHistory(complexId) {
 
   if (error) throw new Error(error.message)
   return data
+}
+
+/**
+ * Current readings from the cycle immediately before `anchor` in plaza order.
+ * Used so each cycle’s previous meters chain from the preceding cycle.
+ *
+ * @param {string} complexId
+ * @param {{ id?: string|number, cycle_date?: string, published_at?: string, created_at?: string }} anchor
+ * @returns {Promise<Record<string, number>>} businessId → current_reading
+ */
+export async function fetchPrecedingCurrentReadings(complexId, anchor) {
+  if (!complexId || !anchor) return {}
+  const history = await fetchCycleHistory(complexId)
+  const preceding = findPrecedingCycle(history || [], {
+    id: anchor.id,
+    cycle_date: anchor.cycle_date || anchor.cycleDate || new Date().toISOString(),
+    published_at: anchor.published_at || anchor.publishedAt || null,
+    created_at: anchor.created_at || anchor.createdAt || null,
+  })
+  if (!preceding?.id) return {}
+  const rows = await fetchCycleDetail(preceding.id)
+  return Object.fromEntries(
+    (rows || [])
+      .filter(r => r.business_id != null)
+      .map(r => [String(r.business_id), Number(r.current_reading) || 0]),
+  )
 }
 
 export async function fetchPublishedCycles(complexId) {

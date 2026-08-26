@@ -15,6 +15,7 @@ import {
   fetchPublicCycleForPlaza,
   fetchComplexSettings,
   fetchPlazaBySlug,
+  fetchPrecedingCurrentReadings,
   markBillPayment,
 } from '../services/supabase'
 import { putEvidence, evidenceKey } from '../services/evidenceStore'
@@ -208,14 +209,23 @@ export default function BillsTablePage({
       : fetchCycleById(cycleId, complexId)
 
     Promise.all([loadCycle, fetchCycleDetail(cycleId)])
-      .then(([cycle, rows]) => {
+      .then(async ([cycle, rows]) => {
         if (cancelled) return
         if (!cycle) {
           setError('This billing cycle was not found.')
           setSaved(null)
           return
         }
-        setSaved({ cycle, rows })
+        let precedingCurrents = null
+        if (cycle.status === 'published' && cycle.complex_id) {
+          try {
+            precedingCurrents = await fetchPrecedingCurrentReadings(cycle.complex_id, cycle)
+          } catch {
+            precedingCurrents = null
+          }
+        }
+        if (cancelled) return
+        setSaved({ cycle, rows, precedingCurrents })
       })
       .catch(() => {
         if (!cancelled) setError('Failed to load this billing cycle.')
@@ -251,7 +261,13 @@ export default function BillsTablePage({
   const result = useMemo(() => {
     if (mode === 'draft') return draftResult
     if ((mode === 'saved' || mode === 'public-cycle') && saved) {
-      return resultFromSavedCycle(saved.cycle, saved.rows)
+      const rate = Number(paySettings?.rate_per_unit) > 0
+        ? Number(paySettings.rate_per_unit)
+        : RATE_PER_UNIT
+      return resultFromSavedCycle(saved.cycle, saved.rows, {
+        precedingCurrents: saved.precedingCurrents,
+        ratePerUnit: rate,
+      })
     }
     if (mode === 'public' && publicPayload) {
       return {
@@ -271,7 +287,7 @@ export default function BillsTablePage({
       }
     }
     return null
-  }, [mode, draftResult, saved, publicPayload])
+  }, [mode, draftResult, saved, publicPayload, paySettings?.rate_per_unit])
 
   const cycleStatus = saved?.cycle?.status || (mode === 'draft' ? 'draft' : null)
   const isPublished = cycleStatus === 'published'

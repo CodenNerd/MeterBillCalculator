@@ -20,6 +20,7 @@ import {
   fetchLatestSeedCycle,
   seedPreviousFromCycle,
   saveCycleReadings,
+  fetchPrecedingCurrentReadings,
 } from '../../services/supabase'
 import { navigate } from '../../utils/navigation'
 import { plazaPath } from '../../utils/plaza'
@@ -263,19 +264,20 @@ export function BillingProvider({ children }) {
    */
   async function startFreshCycle() {
     clearDraft()
+    const draftDate = toDateInputValue()
     if (complex?.id) {
       try {
+        const seeded = await fetchPrecedingCurrentReadings(complex.id, {
+          cycle_date: draftDate,
+          published_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        })
+        if (Object.keys(seeded).length) {
+          setPreviousOverride(seeded)
+        }
+        // Persist onto businesses for live previous when override is cleared later.
         const latest = await fetchLatestSeedCycle(complex.id)
         if (latest?.id) {
-          const rows = await fetchCycleDetail(latest.id)
-          const seeded = Object.fromEntries(
-            (rows || [])
-              .filter(r => r.business_id != null)
-              .map(r => [String(r.business_id), Number(r.current_reading) || 0]),
-          )
-          if (Object.keys(seeded).length) {
-            setPreviousOverride(seeded)
-          }
           try {
             await seedPreviousFromCycle(latest.id)
             await reload()
@@ -318,6 +320,13 @@ export function BillingProvider({ children }) {
       return cycle
     }
 
+    let precedingCurrents = {}
+    try {
+      precedingCurrents = await fetchPrecedingCurrentReadings(complex.id, cycle)
+    } catch {
+      precedingCurrents = {}
+    }
+
     const nextCurrent = {}
     const nextMisc = {}
     const nextNotes = {}
@@ -327,7 +336,10 @@ export function BillingProvider({ children }) {
       nextCurrent[r.business_id] = String(r.current_reading)
       nextMisc[r.business_id] = r.misc ? String(r.misc) : ''
       nextNotes[r.business_id] = r.misc_note || ''
-      nextPrevious[r.business_id] = Number(r.previous_reading) || 0
+      const chained = precedingCurrents[r.business_id] ?? precedingCurrents[String(r.business_id)]
+      nextPrevious[r.business_id] = chained != null
+        ? Number(chained) || 0
+        : Number(r.previous_reading) || 0
       if (r.exclude_from_offset) nextExclude[r.business_id] = true
     }
     setCurrent(nextCurrent)
@@ -366,6 +378,72 @@ export function BillingProvider({ children }) {
     return null
   }
 
+  async function rowsWithChainedPrevious(result, dateValue, existingId) {
+    let preceding = {}
+    try {
+      preceding = await fetchPrecedingCurrentReadings(complex.id, {
+        id: existingId,
+        cycle_date: dateValue ? new Date(dateValue).toISOString() : new Date().toISOString(),
+        published_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      })
+    } catch {
+      preceding = {}
+    }
+    if (!Object.keys(preceding).length) {
+      return { rows: result.rows, summaryPatch: null }
+    }
+
+    const businesses = result.rows.map(r => ({ id: r.id, name: r.name }))
+    const previous = {}
+    const current = {}
+    const miscMap = {}
+    const notesMap = {}
+    const excludeMap = {}
+    for (const r of result.rows) {
+      const chained = preceding[r.id] ?? preceding[String(r.id)]
+      previous[r.id] = chained != null ? Number(chained) || 0 : r.prev
+      current[r.id] = r.curr
+      miscMap[r.id] = r.misc
+      notesMap[r.id] = r.note || ''
+      if (r.excludeFromOffset) excludeMap[r.id] = true
+    }
+
+    const recomputed = computeCycleResult(
+      businesses,
+      previous,
+      current,
+      miscMap,
+      result.actualBill,
+      result.allocationMethod || allocationMethod,
+      notesMap,
+      ratePerUnit,
+      { excludeFromOffset: excludeMap },
+    )
+
+    const payById = Object.fromEntries(
+      result.rows.map(r => [String(r.id), {
+        paymentStatus: r.paymentStatus,
+        amountPaid: r.amountPaid,
+      }]),
+    )
+
+    return {
+      rows: recomputed.rows.map(r => ({
+        ...r,
+        paymentStatus: payById[String(r.id)]?.paymentStatus,
+        amountPaid: payById[String(r.id)]?.amountPaid,
+      })),
+      summaryPatch: {
+        calculatedUnitTotal: recomputed.calculatedUnitTotal,
+        totalMisc: recomputed.totalMisc,
+        lineLoss: recomputed.lineLoss,
+        allocationMethod: recomputed.allocationMethod || allocationMethod,
+        actualBill: recomputed.actualBill,
+      },
+    }
+  }
+
   async function handlePublish(result, overrides = {}) {
     if (result.lineLoss === undefined) {
       showToast('Enter the office bill before publishing')
@@ -376,17 +454,23 @@ export function BillingProvider({ children }) {
     const nameValue = overrides.name || cycleName || defaultCycleName(dateValue)
     const existingId = resolveExistingCycleId(overrides)
 
+    const { rows: publishRows, summaryPatch } = await rowsWithChainedPrevious(
+      result,
+      dateValue,
+      existingId,
+    )
+
     const summary = {
-      actualBill: result.actualBill,
-      calculatedUnitTotal: result.calculatedUnitTotal,
-      totalMisc: result.totalMisc,
-      lineLoss: result.lineLoss,
-      allocationMethod: result.allocationMethod || allocationMethod,
+      actualBill: summaryPatch?.actualBill ?? result.actualBill,
+      calculatedUnitTotal: summaryPatch?.calculatedUnitTotal ?? result.calculatedUnitTotal,
+      totalMisc: summaryPatch?.totalMisc ?? result.totalMisc,
+      lineLoss: summaryPatch?.lineLoss ?? result.lineLoss,
+      allocationMethod: summaryPatch?.allocationMethod || result.allocationMethod || allocationMethod,
       name: nameValue,
       cycleDate: dateValue ? new Date(dateValue).toISOString() : new Date().toISOString(),
     }
 
-    const cycle = await publishCycle(summary, result.rows, complex.id, existingId)
+    const cycle = await publishCycle(summary, publishRows, complex.id, existingId)
     try {
       await rollCarryOverReadings()
     } catch {
@@ -414,17 +498,22 @@ export function BillingProvider({ children }) {
     const nameValue = overrides.name || cycleName || defaultCycleName(dateValue)
 
     try {
+      const { rows: publishRows, summaryPatch } = await rowsWithChainedPrevious(
+        result,
+        dateValue,
+        id,
+      )
       const summary = {
-        actualBill: result.actualBill,
-        calculatedUnitTotal: result.calculatedUnitTotal,
-        totalMisc: result.totalMisc,
-        lineLoss: result.lineLoss,
-        allocationMethod: result.allocationMethod || allocationMethod,
+        actualBill: summaryPatch?.actualBill ?? result.actualBill,
+        calculatedUnitTotal: summaryPatch?.calculatedUnitTotal ?? result.calculatedUnitTotal,
+        totalMisc: summaryPatch?.totalMisc ?? result.totalMisc,
+        lineLoss: summaryPatch?.lineLoss ?? result.lineLoss,
+        allocationMethod: summaryPatch?.allocationMethod || result.allocationMethod || allocationMethod,
         name: nameValue,
         cycleDate: dateValue ? new Date(dateValue).toISOString() : new Date().toISOString(),
       }
-      await publishCycle(summary, result.rows, complex.id, id)
-      await concludeCycle(id, complex.id, result.rows, evidenceMap)
+      await publishCycle(summary, publishRows, complex.id, id)
+      await concludeCycle(id, complex.id, publishRows, evidenceMap)
       try {
         await rollCarryOverReadings()
       } catch {

@@ -13,6 +13,43 @@ export function flagOn(map, id) {
   return Boolean(map[id] || map[String(id)])
 }
 
+function cycleTimeMs(value) {
+  if (value == null || value === '') return 0
+  const t = new Date(value).getTime()
+  return Number.isFinite(t) ? t : 0
+}
+
+/** Ascending cycle order: cycle_date → published_at → created_at → id. */
+export function compareCyclesAsc(a, b) {
+  const d = cycleTimeMs(a?.cycle_date) - cycleTimeMs(b?.cycle_date)
+  if (d !== 0) return d
+  const p = cycleTimeMs(a?.published_at) - cycleTimeMs(b?.published_at)
+  if (p !== 0) return p
+  const c = cycleTimeMs(a?.created_at) - cycleTimeMs(b?.created_at)
+  if (c !== 0) return c
+  return Number(a?.id || 0) - Number(b?.id || 0)
+}
+
+/**
+ * Cycle immediately before `anchor` in plaza order.
+ * `history` may be unsorted. Anchor may be an existing cycle or a draft date.
+ */
+export function findPrecedingCycle(history, anchor) {
+  if (!anchor || !history?.length) return null
+  const sorted = [...history].sort(compareCyclesAsc)
+  if (anchor.id != null && anchor.id !== '') {
+    const idx = sorted.findIndex(c => String(c.id) === String(anchor.id))
+    if (idx > 0) return sorted[idx - 1]
+    if (idx === 0) return null
+  }
+  let preceding = null
+  for (const c of sorted) {
+    if (compareCyclesAsc(c, anchor) < 0) preceding = c
+    else break
+  }
+  return preceding
+}
+
 export function calculateBills(businesses, previous, current, misc = {}, notes = {}, ratePerUnit = RATE_PER_UNIT) {
   const rate = Number(ratePerUnit) > 0 ? Number(ratePerUnit) : RATE_PER_UNIT
   let totalUnits = 0
