@@ -15,6 +15,8 @@ export default function CycleWorksheetPage() {
         current={b.current}
         misc={b.misc}
         notes={b.notes}
+        excludeFromOffset={b.excludeFromOffset}
+        carryOver={b.carryOver}
         actualBill={b.actualBill}
         allocationMethod={b.allocationMethod || ALLOCATION_EQUAL}
         cycleDate={b.cycleDate}
@@ -28,6 +30,8 @@ export default function CycleWorksheetPage() {
         onCurrentChange={b.handleCurrentChange}
         onMiscChange={b.handleMiscChange}
         onNoteChange={b.handleNoteChange}
+        onExcludeFromOffsetChange={b.handleExcludeFromOffsetChange}
+        onCarryOverChange={b.handleCarryOverChange}
         onActualBillChange={b.setActualBill}
         onAllocationMethodChange={b.setAllocationMethod}
         onCycleDateChange={b.setCycleDate}

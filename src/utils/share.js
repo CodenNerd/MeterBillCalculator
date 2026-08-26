@@ -68,6 +68,7 @@ export function resultFromSavedCycle(cycle, detailRows) {
     amount: Number(r.unit_amount) + Number(r.misc),
     lineLossShare: Number(r.line_loss_share),
     finalAmount: Number(r.final_amount),
+    excludeFromOffset: Boolean(r.exclude_from_offset),
     paymentStatus: r.payment_status || 'awaiting',
     amountPaid: r.amount_paid == null ? null : Number(r.amount_paid),
   }))

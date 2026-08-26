@@ -7,6 +7,12 @@ export const PAYMENT_AWAITING = 'awaiting'
 export const PAYMENT_PAID = 'paid'
 export const PAYMENT_UNPAID = 'unpaid'
 
+/** True when a per-business flag map has this id set (string/number keys). */
+export function flagOn(map, id) {
+  if (!map || id == null) return false
+  return Boolean(map[id] || map[String(id)])
+}
+
 export function calculateBills(businesses, previous, current, misc = {}, notes = {}, ratePerUnit = RATE_PER_UNIT) {
   const rate = Number(ratePerUnit) > 0 ? Number(ratePerUnit) : RATE_PER_UNIT
   let totalUnits = 0
@@ -14,13 +20,14 @@ export function calculateBills(businesses, previous, current, misc = {}, notes =
   let totalAmount = 0
 
   const rows = businesses.map(biz => {
-    const prev = previous[biz.id] ?? 0
-    const curr = parseFloat(current[biz.id]) || 0
+    const prev = previous[biz.id] ?? previous[String(biz.id)] ?? 0
+    const curr = parseFloat(current[biz.id] ?? current[String(biz.id)]) || 0
     const units = Math.max(0, curr - prev)
     const unitAmount = units * rate
-    const miscBill = Math.max(0, parseFloat(misc[biz.id]) || 0)
+    const miscBill = Math.max(0, parseFloat(misc[biz.id] ?? misc[String(biz.id)]) || 0)
     const amount = unitAmount + miscBill
-    const note = notes[biz.id] != null ? String(notes[biz.id]) : ''
+    const noteRaw = notes[biz.id] ?? notes[String(biz.id)]
+    const note = noteRaw != null ? String(noteRaw) : ''
 
     totalUnits += units
     totalMisc += miscBill
@@ -56,14 +63,14 @@ function round2(n) {
  * Compare the calculated (meter-based) total against the actual bill from
  * the electricity office, and split the difference ("line loss") either
  * evenly or proportional to each business's energy charge.
+ * Rows with excludeFromOffset get lineLossShare 0 and are left out of the split.
  */
 export function applyLineLoss(result, actualBill, method = ALLOCATION_EQUAL) {
   const { rows } = result
   const calculatedUnitTotal = rows.reduce((sum, r) => sum + r.unitAmount, 0)
   const lineLoss = actualBill - calculatedUnitTotal
-  const n = rows.length
 
-  if (n === 0) {
+  if (rows.length === 0) {
     return {
       ...result,
       rows: [],
@@ -75,24 +82,40 @@ export function applyLineLoss(result, actualBill, method = ALLOCATION_EQUAL) {
     }
   }
 
+  const participants = rows.filter(r => !r.excludeFromOffset)
+  const participantUnitTotal = participants.reduce((sum, r) => sum + r.unitAmount, 0)
+  const n = participants.length
+
   const useProportional =
-    method === ALLOCATION_PROPORTIONAL && calculatedUnitTotal > 0
+    method === ALLOCATION_PROPORTIONAL && participantUnitTotal > 0
 
-  const rawShares = rows.map(row => {
-    if (useProportional) {
-      return lineLoss * (row.unitAmount / calculatedUnitTotal)
+  const shareById = new Map()
+  if (n === 0) {
+    for (const row of rows) shareById.set(row.id, 0)
+  } else {
+    const rawShares = participants.map(row => {
+      if (useProportional) {
+        return lineLoss * (row.unitAmount / participantUnitTotal)
+      }
+      return lineLoss / n
+    })
+
+    const roundedShares = rawShares.map((s, i) =>
+      i === n - 1 ? 0 : round2(s),
+    )
+    const allocated = roundedShares.slice(0, -1).reduce((sum, s) => sum + s, 0)
+    roundedShares[n - 1] = round2(lineLoss - allocated)
+
+    participants.forEach((row, i) => {
+      shareById.set(row.id, roundedShares[i])
+    })
+    for (const row of rows) {
+      if (!shareById.has(row.id)) shareById.set(row.id, 0)
     }
-    return lineLoss / n
-  })
+  }
 
-  const roundedShares = rawShares.map((s, i) =>
-    i === n - 1 ? 0 : round2(s)
-  )
-  const allocated = roundedShares.slice(0, -1).reduce((sum, s) => sum + s, 0)
-  roundedShares[n - 1] = round2(lineLoss - allocated)
-
-  const updatedRows = rows.map((row, i) => {
-    const lineLossShare = roundedShares[i]
+  const updatedRows = rows.map(row => {
+    const lineLossShare = shareById.get(row.id) ?? 0
     const finalAmount = round2(row.unitAmount + row.misc + lineLossShare)
     return {
       ...row,
@@ -114,6 +137,11 @@ export function applyLineLoss(result, actualBill, method = ALLOCATION_EQUAL) {
   }
 }
 
+/**
+ * @param {object} [inclusion]
+ * @param {Record<string|number, boolean>} [inclusion.excludeFromOffset]
+ * @param {Record<string|number, boolean>} [inclusion.carryOver]
+ */
 export function computeCycleResult(
   businesses,
   previous,
@@ -123,8 +151,18 @@ export function computeCycleResult(
   method,
   notes = {},
   ratePerUnit = RATE_PER_UNIT,
+  inclusion = {},
 ) {
-  const base = calculateBills(businesses, previous, current, misc, notes, ratePerUnit)
+  const excludeFromOffset = inclusion.excludeFromOffset || {}
+  const carryOver = inclusion.carryOver || {}
+
+  const billed = (businesses || []).filter(b => !flagOn(carryOver, b.id))
+  const base = calculateBills(billed, previous, current, misc, notes, ratePerUnit)
+  base.rows = base.rows.map(row => ({
+    ...row,
+    excludeFromOffset: flagOn(excludeFromOffset, row.id),
+  }))
+
   const parsed = parseFloat(actualBillInput)
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return base

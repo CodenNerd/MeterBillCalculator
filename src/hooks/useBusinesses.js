@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react'
 import {
   fetchBusinesses,
+  fetchArchivedBusinesses,
   addBusiness,
   renameBusiness,
   replaceTenant,
-  removeBusiness,
+  archiveBusiness,
+  restoreBusiness,
   saveCycleReadings,
   updatePreviousReading,
 } from '../services/supabase'
@@ -16,12 +18,14 @@ import {
  */
 export function useBusinesses(complexId) {
   const [businesses, setBusinesses] = useState([])
+  const [archived, setArchived] = useState([])
   const [loading, setLoading] = useState(Boolean(complexId))
   const [error, setError] = useState(null)
 
   useEffect(() => {
     if (!complexId) {
       setBusinesses([])
+      setArchived([])
       setError(null)
       setLoading(false)
       return
@@ -31,8 +35,14 @@ export function useBusinesses(complexId) {
       try {
         setLoading(true)
         setError(null)
-        const data = await fetchBusinesses(complexId)
-        if (!cancelled) setBusinesses(data)
+        const [active, hidden] = await Promise.all([
+          fetchBusinesses(complexId),
+          fetchArchivedBusinesses(complexId),
+        ])
+        if (!cancelled) {
+          setBusinesses(active)
+          setArchived(hidden)
+        }
       } catch {
         if (!cancelled) setError('Failed to load data. Check your connection.')
       } finally {
@@ -45,14 +55,19 @@ export function useBusinesses(complexId) {
   async function load() {
     if (!complexId) {
       setBusinesses([])
+      setArchived([])
       setLoading(false)
       return
     }
     try {
       setLoading(true)
       setError(null)
-      const data = await fetchBusinesses(complexId)
-      setBusinesses(data)
+      const [active, hidden] = await Promise.all([
+        fetchBusinesses(complexId),
+        fetchArchivedBusinesses(complexId),
+      ])
+      setBusinesses(active)
+      setArchived(hidden)
     } catch {
       setError('Failed to load data. Check your connection.')
     } finally {
@@ -97,10 +112,34 @@ export function useBusinesses(complexId) {
 
   async function remove(id) {
     try {
-      await removeBusiness(id)
-      setBusinesses(prev => prev.filter(b => b.id !== id))
+      await archiveBusiness(id)
+      let archivedRow = null
+      setBusinesses(prev => {
+        archivedRow = prev.find(b => b.id === id) || null
+        return prev.filter(b => b.id !== id)
+      })
+      if (archivedRow) {
+        setArchived(prev => [
+          ...prev,
+          { ...archivedRow, archived_at: new Date().toISOString() },
+        ].sort((a, b) => String(a.name).localeCompare(String(b.name))))
+      } else {
+        await load()
+      }
     } catch {
       setError('Failed to remove business.')
+    }
+  }
+
+  async function restore(id) {
+    try {
+      const saved = await restoreBusiness(id)
+      setArchived(prev => prev.filter(b => b.id !== id))
+      setBusinesses(prev => [...prev, saved].sort((a, b) => a.id - b.id))
+      return saved
+    } catch (err) {
+      setError('Failed to restore business.')
+      throw err
     }
   }
 
@@ -144,5 +183,18 @@ export function useBusinesses(complexId) {
     }
   }
 
-  return { businesses, loading, error, add, rename, replace, remove, setPrevious, saveCycle, reload: load }
+  return {
+    businesses,
+    archived,
+    loading,
+    error,
+    add,
+    rename,
+    replace,
+    remove,
+    restore,
+    setPrevious,
+    saveCycle,
+    reload: load,
+  }
 }

@@ -24,6 +24,11 @@ export const MIGRATIONS = [
     file: 'supabase-migration-published-at.sql',
     description: 'billing_cycles.published_at for date + publish-time ordering',
   },
+  {
+    id: '2026-08-26-business-cycle-flags',
+    file: 'supabase-migration-business-cycle-flags.sql',
+    description: 'businesses.archived_at + cycle_business_bills.exclude_from_offset',
+  },
 ]
 
 /** Advisory lock key so concurrent serverless starts don't race. */

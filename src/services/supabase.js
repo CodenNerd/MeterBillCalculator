@@ -18,15 +18,31 @@ export const supabase = createClient(
   SUPABASE_PUBLISHABLE_KEY || 'placeholder-publishable-key',
 )
 /**
- * Fetch all businesses for one complex, with their previous readings.
- * Returns: [{ id, name, email, previous_reading }]
+ * Fetch active (non-archived) businesses for one complex.
+ * Returns: [{ id, name, email, previous_reading, archived_at }]
  */
 export async function fetchBusinesses(complexId) {
   const { data, error } = await supabase
     .from('businesses')
     .select('*')
     .eq('complex_id', complexId)
+    .is('archived_at', null)
     .order('id', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/**
+ * Fetch soft-archived businesses for restore suggestions.
+ */
+export async function fetchArchivedBusinesses(complexId) {
+  const { data, error } = await supabase
+    .from('businesses')
+    .select('*')
+    .eq('complex_id', complexId)
+    .not('archived_at', 'is', null)
+    .order('name', { ascending: true })
 
   if (error) throw new Error(error.message)
   return data
@@ -92,16 +108,37 @@ export async function updatePreviousReading(id, value) {
 }
 
 /**
- * Remove a business from the DB.
+ * Soft-archive a business (hide from worksheets until restored).
  * @param {number} id
  */
-export async function removeBusiness(id) {
+export async function archiveBusiness(id) {
   const { error } = await supabase
     .from('businesses')
-    .delete()
+    .update({ archived_at: new Date().toISOString() })
     .eq('id', id)
 
   if (error) throw new Error(error.message)
+}
+
+/** @deprecated Prefer archiveBusiness — soft-archives instead of deleting. */
+export async function removeBusiness(id) {
+  return archiveBusiness(id)
+}
+
+/**
+ * Restore a soft-archived business onto worksheets.
+ * @param {number} id
+ */
+export async function restoreBusiness(id) {
+  const { data, error } = await supabase
+    .from('businesses')
+    .update({ archived_at: null })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  return data
 }
 
 /**
@@ -164,6 +201,7 @@ function mapBillRows(
       misc_note: r.note || r.miscNote || null,
       line_loss_share: r.lineLossShare ?? 0,
       final_amount: r.finalAmount ?? (r.unitAmount + r.misc),
+      exclude_from_offset: Boolean(r.excludeFromOffset),
       evidence_note: evidence.note ?? meta.evidenceNote ?? null,
       evidence_file_id: evidence.fileId ?? meta.evidenceFileId ?? null,
       payment_status: paymentStatus,

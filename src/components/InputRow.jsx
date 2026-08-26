@@ -10,9 +10,13 @@ export default function InputRow({
   currentValue,
   miscValue,
   noteValue,
+  excludeFromOffset = false,
+  carryOver = false,
   onChange,
   onMiscChange,
   onNoteChange,
+  onExcludeFromOffsetChange,
+  onCarryOverChange,
   onRename,
   onReplaceTenant,
   onRemove,
@@ -22,11 +26,14 @@ export default function InputRow({
   const hasExtras =
     (miscValue !== '' && miscValue != null && parseFloat(miscValue) > 0)
     || Boolean(noteValue && String(noteValue).trim())
+    || excludeFromOffset
+    || carryOver
 
   const [editingName, setEditingName] = useState(false)
   const [extrasOpen, setExtrasOpen] = useState(hasExtras)
   const prev = Number(previous[biz.id] ?? previous[String(biz.id)] ?? 0)
-  const valid = isReadingValid(currentValue, prev)
+  const displayCurrent = carryOver ? String(prev) : currentValue
+  const valid = carryOver || isReadingValid(displayCurrent, prev)
 
   function handleNameBlur(e) {
     onRename(biz.id, e.target.value)
@@ -34,7 +41,7 @@ export default function InputRow({
   }
 
   return (
-    <article className={`biz-block ${!valid ? 'invalid' : ''}`}>
+    <article className={`biz-block ${!valid ? 'invalid' : ''} ${carryOver ? 'biz-block--carry-over' : ''}`}>
       <div className="biz-block-layout">
         <div className="biz-block-main">
           <header className="biz-block-head">
@@ -83,6 +90,10 @@ export default function InputRow({
             )}
           </header>
 
+          {carryOver && (
+            <p className="biz-carry-hint">Vacant this cycle — omitted from bills</p>
+          )}
+
           <div className="biz-block-controls">
             <div className="input-wrap">
               <label>Previous reading (kWh)</label>
@@ -96,11 +107,11 @@ export default function InputRow({
                 type="number"
                 className={`reading-input biz-current-input ${!valid ? 'input-error' : ''}`}
                 placeholder="0.00"
-                value={currentValue ?? ''}
+                value={displayCurrent ?? ''}
                 onChange={e => onChange(biz.id, e.target.value)}
                 step="0.01"
                 min={prev}
-                disabled={readOnly}
+                disabled={readOnly || carryOver}
               />
               {!valid && (
                 <span className="error-msg">Must be ≥ {prev.toFixed(2)} kWh</span>
@@ -138,7 +149,7 @@ export default function InputRow({
                       onChange={e => onMiscChange(biz.id, e.target.value)}
                       step="0.01"
                       min="0"
-                      disabled={readOnly}
+                      disabled={readOnly || carryOver}
                     />
                   </div>
                   <div className="input-wrap">
@@ -152,9 +163,41 @@ export default function InputRow({
                       placeholder="e.g. generator share"
                       value={noteValue ?? ''}
                       onChange={e => onNoteChange?.(biz.id, e.target.value)}
-                      disabled={readOnly}
+                      disabled={readOnly || carryOver}
                     />
                   </div>
+
+                  {!readOnly && (
+                    <div className="biz-flag-toggles">
+                      <label className="biz-flag-check">
+                        <input
+                          type="checkbox"
+                          checked={excludeFromOffset && !carryOver}
+                          disabled={carryOver}
+                          onChange={e => onExcludeFromOffsetChange?.(biz.id, e.target.checked)}
+                        />
+                        <span>
+                          Exclude from offset sharing
+                          <span className="biz-flag-hint">
+                            Still billed for energy and misc; no share of the office-bill offset.
+                          </span>
+                        </span>
+                      </label>
+                      <label className="biz-flag-check">
+                        <input
+                          type="checkbox"
+                          checked={carryOver}
+                          onChange={e => onCarryOverChange?.(biz.id, e.target.checked)}
+                        />
+                        <span>
+                          Carry over previous only
+                          <span className="biz-flag-hint">
+                            Vacant shop — omit from this cycle’s bills; keep previous reading for next cycle.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -165,32 +208,41 @@ export default function InputRow({
           className={`biz-block-stats ${live?.pulse ? 'biz-block-stats--pulse' : ''}`}
           aria-live="polite"
         >
-          <div className="gstat">
-            <span className="gstat-label">Used this cycle</span>
-            <span className="gstat-value mono">
-              {live?.usedLabel ?? '—'}
-            </span>
-          </div>
-          <div className="gstat">
-            <span className="gstat-label">Energy (₦)</span>
-            <span className="gstat-value mono">
-              {live?.energyLabel ?? '—'}
-            </span>
-          </div>
-          {live?.shareLabel != null && (
-            <div className="gstat">
-              <span className="gstat-label">Share of offset</span>
-              <span className={`gstat-value mono ${live.shareNegative ? 'loss-negative' : 'loss-positive'}`}>
-                {live.shareLabel}
-              </span>
+          {carryOver ? (
+            <div className="gstat gstat--total">
+              <span className="gstat-label">This cycle</span>
+              <span className="gstat-value mono">Omitted</span>
             </div>
+          ) : (
+            <>
+              <div className="gstat">
+                <span className="gstat-label">Used this cycle</span>
+                <span className="gstat-value mono">
+                  {live?.usedLabel ?? '—'}
+                </span>
+              </div>
+              <div className="gstat">
+                <span className="gstat-label">Energy (₦)</span>
+                <span className="gstat-value mono">
+                  {live?.energyLabel ?? '—'}
+                </span>
+              </div>
+              {live?.shareLabel != null && (
+                <div className="gstat">
+                  <span className="gstat-label">Share of offset</span>
+                  <span className={`gstat-value mono ${live.shareNegative ? 'loss-negative' : 'loss-positive'}`}>
+                    {live.shareLabel}
+                  </span>
+                </div>
+              )}
+              <div className="gstat gstat--total">
+                <span className="gstat-label">Amount due</span>
+                <span className={`gstat-value mono amount ${live?.pulse ? 'pulse' : ''}`}>
+                  {live?.amountLabel ?? '—'}
+                </span>
+              </div>
+            </>
           )}
-          <div className="gstat gstat--total">
-            <span className="gstat-label">Amount due</span>
-            <span className={`gstat-value mono amount ${live?.pulse ? 'pulse' : ''}`}>
-              {live?.amountLabel ?? '—'}
-            </span>
-          </div>
         </div>
       </div>
     </article>

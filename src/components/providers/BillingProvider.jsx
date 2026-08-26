@@ -9,6 +9,7 @@ import {
   ALLOCATION_EQUAL,
   computeCycleResult,
   defaultCycleName,
+  flagOn,
   toDateInputValue,
 } from '../../utils/billing'
 import {
@@ -18,6 +19,7 @@ import {
   fetchCycleDetail,
   fetchLatestSeedCycle,
   seedPreviousFromCycle,
+  saveCycleReadings,
 } from '../../services/supabase'
 import { navigate } from '../../utils/navigation'
 import { plazaPath } from '../../utils/plaza'
@@ -50,7 +52,7 @@ export function BillingProvider({ children }) {
     return plazaPath(plazaSlug, path)
   }
 
-  const { businesses, loading, error, add, rename, replace, remove, reload } =
+  const { businesses, archived, loading, error, add, rename, replace, remove, restore, reload } =
     useBusinesses(complex?.id)
 
   const ratePerUnit = Number(complex?.rate_per_unit) > 0
@@ -60,6 +62,8 @@ export function BillingProvider({ children }) {
   const [current, setCurrent] = useStorage('mc_current', {})
   const [misc, setMisc] = useStorage('mc_misc', {})
   const [notes, setNotes] = useStorage('mc_notes', {})
+  const [excludeFromOffset, setExcludeFromOffset] = useStorage('mc_exclude_offset', {})
+  const [carryOver, setCarryOver] = useStorage('mc_carry_over', {})
   const [actualBill, setActualBill] = useStorage('mc_actual_bill', '')
   const [allocationMethod, setAllocationMethod] = useStorage('mc_alloc_method', ALLOCATION_EQUAL)
   const [cycleDate, setCycleDate] = useStorage('mc_cycle_date', toDateInputValue())
@@ -126,8 +130,9 @@ export function BillingProvider({ children }) {
       allocationMethod,
       notes,
       ratePerUnit,
+      { excludeFromOffset, carryOver },
     ),
-    [businesses, previousMap, current, misc, notes, actualBill, allocationMethod, ratePerUnit],
+    [businesses, previousMap, current, misc, notes, actualBill, allocationMethod, ratePerUnit, excludeFromOffset, carryOver],
   )
 
   function showToast(msg) {
@@ -147,6 +152,45 @@ export function BillingProvider({ children }) {
     setNotes({ ...notes, [id]: value })
   }
 
+  function handleExcludeFromOffsetChange(id, checked) {
+    const next = { ...excludeFromOffset }
+    if (checked) next[id] = true
+    else {
+      delete next[id]
+      delete next[String(id)]
+    }
+    setExcludeFromOffset(next)
+  }
+
+  function handleCarryOverChange(id, checked) {
+    const next = { ...carryOver }
+    if (checked) {
+      next[id] = true
+      const prev = previousFor(id)
+      setCurrent({ ...current, [id]: String(prev) })
+      const nextMisc = { ...misc }
+      delete nextMisc[id]
+      delete nextMisc[String(id)]
+      setMisc(nextMisc)
+    } else {
+      delete next[id]
+      delete next[String(id)]
+    }
+    setCarryOver(next)
+  }
+
+  function clearBizDraftFields(id) {
+    const strip = (obj) => {
+      const { [id]: _a, [String(id)]: _b, ...rest } = obj || {}
+      return rest
+    }
+    setCurrent(strip(current))
+    setMisc(strip(misc))
+    setNotes(strip(notes))
+    setExcludeFromOffset(strip(excludeFromOffset))
+    setCarryOver(strip(carryOver))
+  }
+
   async function handleRename(id, newName) {
     await rename(id, newName)
   }
@@ -161,18 +205,14 @@ export function BillingProvider({ children }) {
   function handleRemove(id) {
     setConfirm({
       message: 'Remove this business?',
-      detail: 'Their reading history for this cycle will be lost.',
+      detail: 'It stays in the plaza and can be restored from Add business. It will not appear on this or future worksheets until restored.',
       confirmLabel: 'Remove',
       danger: true,
       onConfirm: async () => {
         await remove(id)
-        const { [id]: _, ...rest } = current
-        setCurrent(rest)
-        const { [id]: __, ...restMisc } = misc
-        setMisc(restMisc)
-        const { [id]: ___, ...restNotes } = notes
-        setNotes(restNotes)
+        clearBizDraftFields(id)
         setConfirm(null)
+        showToast('Business removed — restore anytime from Add business')
       },
     })
   }
@@ -185,16 +225,36 @@ export function BillingProvider({ children }) {
     }
   }
 
+  async function handleRestoreBusiness(biz) {
+    const saved = await restore(biz.id)
+    if (saved) {
+      setShowAddBusiness(false)
+      showToast(`Restored ${saved.name}`)
+    }
+  }
+
   function clearDraft() {
     setCurrent({})
     setMisc({})
     setNotes({})
+    setExcludeFromOffset({})
+    setCarryOver({})
     setActualBill('')
     setAllocationMethod(ALLOCATION_EQUAL)
     setCycleDate(toDateInputValue())
     setCycleName(defaultCycleName())
     setActiveCycleId(null)
     clearPreviousOverride()
+  }
+
+  async function rollCarryOverReadings() {
+    const updates = businesses
+      .filter(b => flagOn(carryOver, b.id))
+      .map(b => ({
+        id: b.id,
+        previous_reading: previousFor(b.id),
+      }))
+    if (updates.length) await saveCycleReadings(updates)
   }
 
   /**
@@ -262,15 +322,19 @@ export function BillingProvider({ children }) {
     const nextMisc = {}
     const nextNotes = {}
     const nextPrevious = {}
+    const nextExclude = {}
     for (const r of rows) {
       nextCurrent[r.business_id] = String(r.current_reading)
       nextMisc[r.business_id] = r.misc ? String(r.misc) : ''
       nextNotes[r.business_id] = r.misc_note || ''
       nextPrevious[r.business_id] = Number(r.previous_reading) || 0
+      if (r.exclude_from_offset) nextExclude[r.business_id] = true
     }
     setCurrent(nextCurrent)
     setMisc(nextMisc)
     setNotes(nextNotes)
+    setExcludeFromOffset(nextExclude)
+    setCarryOver({})
     setPreviousOverride(
       Object.fromEntries(
         Object.entries(nextPrevious).map(([id, value]) => [String(id), value]),
@@ -323,6 +387,11 @@ export function BillingProvider({ children }) {
     }
 
     const cycle = await publishCycle(summary, result.rows, complex.id, existingId)
+    try {
+      await rollCarryOverReadings()
+    } catch {
+      // Non-fatal: bills are published; previous may already be correct.
+    }
     clearDraft()
     setHistoryKey(k => k + 1)
     showToast(existingId ? 'Published cycle updated' : 'Cycle published')
@@ -356,6 +425,11 @@ export function BillingProvider({ children }) {
       }
       await publishCycle(summary, result.rows, complex.id, id)
       await concludeCycle(id, complex.id, result.rows, evidenceMap)
+      try {
+        await rollCarryOverReadings()
+      } catch {
+        // Non-fatal after conclude.
+      }
       clearDraft()
       setHistoryKey(k => k + 1)
       await reload()
@@ -377,6 +451,7 @@ export function BillingProvider({ children }) {
     ready,
     authError,
     businesses,
+    archived,
     loading,
     error,
     reload,
@@ -385,6 +460,8 @@ export function BillingProvider({ children }) {
     current,
     misc,
     notes,
+    excludeFromOffset,
+    carryOver,
     actualBill,
     allocationMethod,
     cycleDate,
@@ -397,6 +474,8 @@ export function BillingProvider({ children }) {
     handleCurrentChange,
     handleMiscChange,
     handleNoteChange,
+    handleExcludeFromOffsetChange,
+    handleCarryOverChange,
     handleRename,
     setReplaceTarget,
     handleRemove,
@@ -430,7 +509,9 @@ export function BillingProvider({ children }) {
       )}
       {showAddBusiness && (
         <AddBusinessDialog
+          archived={archived}
           onAdd={handleAddBusiness}
+          onRestore={handleRestoreBusiness}
           onCancel={() => setShowAddBusiness(false)}
         />
       )}

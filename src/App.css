@@ -1903,6 +1903,88 @@ button.table-row--clickable {
   background: linear-gradient(var(--danger-soft), var(--surface) 40%);
 }
 
+.biz-block--carry-over {
+  opacity: 0.78;
+  border-style: dashed;
+}
+
+.biz-carry-hint {
+  margin: 8px 24px 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.biz-flag-toggles {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.biz-flag-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.biz-flag-check input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.biz-flag-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.biz-flag-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.add-biz-restore {
+  margin-bottom: 16px;
+}
+
+.add-biz-restore-label {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.add-biz-restore-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.add-biz-restore-chip {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.add-biz-restore-chip:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.add-biz-restore-chip:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .biz-block-head {
   display: flex;
   align-items: center;

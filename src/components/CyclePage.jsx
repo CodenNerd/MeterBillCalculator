@@ -8,6 +8,7 @@ import {
   ALLOCATION_PROPORTIONAL,
   RATE_PER_UNIT,
   computeCycleResult,
+  flagOn,
   formatKwh,
   formatNaira,
 } from '../utils/billing'
@@ -20,6 +21,8 @@ export default function CyclePage({
   current,
   misc,
   notes,
+  excludeFromOffset = {},
+  carryOver = {},
   actualBill,
   allocationMethod,
   cycleDate,
@@ -33,6 +36,8 @@ export default function CyclePage({
   onCurrentChange,
   onMiscChange,
   onNoteChange,
+  onExcludeFromOffsetChange,
+  onCarryOverChange,
   onActualBillChange,
   onAllocationMethodChange,
   onCycleDateChange,
@@ -45,6 +50,10 @@ export default function CyclePage({
 }) {
   const go = (path) => navigate(href ? href(path) : path)
   const rate = Number(ratePerUnit) > 0 ? Number(ratePerUnit) : RATE_PER_UNIT
+  const inclusion = useMemo(
+    () => ({ excludeFromOffset, carryOver }),
+    [excludeFromOffset, carryOver],
+  )
   const result = useMemo(
     () => computeCycleResult(
       businesses,
@@ -55,13 +64,15 @@ export default function CyclePage({
       allocationMethod,
       notes,
       rate,
+      inclusion,
     ),
-    [businesses, previous, current, misc, notes, actualBill, allocationMethod, rate],
+    [businesses, previous, current, misc, notes, actualBill, allocationMethod, rate, inclusion],
   )
 
+  const billedCount = businesses.filter(b => !flagOn(carryOver, b.id)).length
   const hasLineLoss = result.lineLoss !== undefined
   const billParsed = parseFloat(actualBill)
-  const canViewBills = businesses.length > 0 && Number.isFinite(billParsed) && billParsed > 0
+  const canViewBills = billedCount > 0 && Number.isFinite(billParsed) && billParsed > 0
   const rowById = Object.fromEntries(result.rows.map(r => [r.id, r]))
   const meterTotal = result.rows.reduce((s, r) => s + r.unitAmount, 0)
 
@@ -172,8 +183,8 @@ export default function CyclePage({
               </div>
               <p className="alloc-hint">
                 {allocationMethod === ALLOCATION_PROPORTIONAL
-                  ? 'Offset (₦) is weighted by each business\'s energy charge.'
-                  : 'Offset (₦) is divided evenly across every business.'}
+                  ? 'Offset (₦) is weighted by each business\'s energy charge (excluding opted-out shops).'
+                  : 'Offset (₦) is divided evenly across businesses that share the offset.'}
               </p>
             </div>
           </div>
@@ -214,6 +225,7 @@ export default function CyclePage({
 
         <div className="biz-list">
           {businesses.map((biz, index) => {
+            const isCarry = flagOn(carryOver, biz.id)
             const row = rowById[biz.id]
             const live = row
               ? {
@@ -237,9 +249,13 @@ export default function CyclePage({
                 currentValue={current[biz.id]}
                 miscValue={misc[biz.id]}
                 noteValue={notes?.[biz.id]}
+                excludeFromOffset={flagOn(excludeFromOffset, biz.id)}
+                carryOver={isCarry}
                 onChange={onCurrentChange}
                 onMiscChange={onMiscChange}
                 onNoteChange={onNoteChange}
+                onExcludeFromOffsetChange={onExcludeFromOffsetChange}
+                onCarryOverChange={onCarryOverChange}
                 onRename={onRename}
                 onReplaceTenant={onReplaceTenant}
                 onRemove={onRemove}
@@ -258,11 +274,14 @@ export default function CyclePage({
 
       <div className="cycle-sticky-bar no-print">
         <div className="cycle-sticky-inner">
-          {!canViewBills && businesses.length > 0 && (
+          {!canViewBills && billedCount > 0 && (
             <p className="cycle-sticky-hint">Enter the NEPA office bill (₦) to view the bills table.</p>
           )}
           {businesses.length === 0 && (
             <p className="cycle-sticky-hint">Add at least one business to continue.</p>
+          )}
+          {businesses.length > 0 && billedCount === 0 && (
+            <p className="cycle-sticky-hint">At least one business must be included in this cycle (not carry-over only).</p>
           )}
           <div className="cycle-sticky-actions">
             <button className="btn btn-ghost" onClick={onClear} type="button">Clear</button>
